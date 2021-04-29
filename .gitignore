@@ -1,0 +1,17 @@
+.idea
+visualisation
+pretrained_models/*
+data/data/graph/*
+data/data/pie/*
+data/graph/*
+data/nodes_and_features/*
+data/pie/*
+PIE_dataset/*
+__pycache__
+graph_model/__pycache__
+graph_model/checkpoints
+graph_model/pretrained_weight
+graph_model/network
+pie_model/__pycache__
+visualisation/*
+

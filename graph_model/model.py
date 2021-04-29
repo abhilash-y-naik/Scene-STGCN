@@ -1,0 +1,257 @@
+import os
+import math
+import sys
+
+import torch
+import torch.nn as nn
+import numpy as np
+import torch.nn.functional as F
+from torch.nn import init
+from torch.nn.parameter import Parameter
+from torch.nn.modules.module import Module
+
+import torch.optim as optim
+
+
+class ConvTemporalGraphical(nn.Module):
+    # Source : https://github.com/yysijie/st-gcn/blob/master/net/st_gcn.py
+    r"""The basic module for applying a graph convolution.
+    Args:
+        in_channels (int): Number of channels in the input sequence data
+        out_channels (int): Number of channels produced by the convolution
+        kernel_size (int): Size of the graph convolving kernel
+        t_kernel_size (int): Size of the temporal convolving kernel
+        t_stride (int, optional): Stride of the temporal convolution. Default: 1
+        t_padding (int, optional): Temporal zero-padding added to both sides of
+            the input. Default: 0
+        t_dilation (int, optional): Spacing between temporal kernel elements.
+            Default: 1
+        bias (bool, optional): If ``True``, adds a learnable bias to the output.
+            Default: ``True``
+    Shape:
+        - Input[0]: Input graph sequence in :math:`(N, in_channels, T_{in}, V)` format
+        - Input[1]: Input graph adjacency matrix in :math:`(K, V, V)` format
+        - Output[0]: Outpu graph sequence in :math:`(N, out_channels, T_{out}, V)` format
+        - Output[1]: Graph adjacency matrix for output data in :math:`(K, V, V)` format
+        where
+            :math:`N` is a batch size,
+            :math:`K` is the spatial kernel size, as :math:`K == kernel_size[1]`,
+            :math:`T_{in}/T_{out}` is a length of input/output sequence,
+            :math:`V` is the number of graph nodes.
+    """
+
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 t_kernel_size=1,
+                 t_stride=1,
+                 t_padding=0,
+                 t_dilation=1,
+                 bias=True):
+        super(ConvTemporalGraphical, self).__init__()
+        self.kernel_size = kernel_size
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=(t_kernel_size, 1),
+            padding=(t_padding, 0),
+            stride=(t_stride, 1),
+            dilation=(t_dilation, 1),
+            bias=bias)
+
+    def forward(self, x, A):
+        assert A.size(1) == self.kernel_size
+        x = self.conv(x)
+        x = torch.einsum('nctv,ntvw->nctw', (x, A))
+        return x.contiguous(), A
+
+
+class st_gcn(nn.Module):
+    r"""Applies a spatial temporal graph convolution over an input graph sequence.
+    Args:
+        in_channels (int): Number of channels in the input sequence data
+        out_channels (int): Number of channels produced by the convolution
+        kernel_size (tuple): Size of the temporal convolving kernel and graph convolving kernel
+        stride (int, optional): Stride of the temporal convolution. Default: 1
+        dropout (int, optional): Dropout rate of the final output. Default: 0
+        residual (bool, optional): If ``True``, applies a residual mechanism. Default: ``True``
+    Shape:
+        - Input[0]: Input graph sequence in :math:`(N, in_channels, T_{in}, V)` format
+        - Input[1]: Input graph adjacency matrix in :math:`(K, V, V)` format
+        - Output[0]: Outpu graph sequence in :math:`(N, out_channels, T_{out}, V)` format
+        - Output[1]: Graph adjacency matrix for output data in :math:`(K, V, V)` format
+        where
+            :math:`N` is a batch size,
+            :math:`K` is the spatial kernel size, as :math:`K == kernel_size[1]`,
+            :math:`T_{in}/T_{out}` is a length of input/output sequence,
+            :math:`V` is the number of graph nodes.
+    """
+
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 use_mdn=False,
+                 stride=1,
+                 dropout=0,
+                 residual=True):
+        super(st_gcn, self).__init__()
+
+        #         print("outstg",out_channels)
+
+        assert len(kernel_size) == 2
+        assert kernel_size[0] % 2 == 1
+        padding = ((kernel_size[0] - 1) // 2, 0)
+        self.use_mdn = use_mdn
+
+        self.gcn = ConvTemporalGraphical(in_channels, out_channels,
+                                         kernel_size[1])
+
+        self.tcn = nn.Sequential(
+            nn.BatchNorm2d(out_channels),
+            nn.PReLU(),
+            nn.Conv2d(
+                out_channels,
+                out_channels,
+                (kernel_size[0], 1),
+                (stride, 1),
+                padding,
+            ),
+            nn.BatchNorm2d(out_channels),
+            nn.Dropout(dropout, inplace=True),
+        )
+
+        if not residual:
+            self.residual = lambda x: 0
+
+        elif (in_channels == out_channels) and (stride == 1):
+            self.residual = lambda x: x
+
+        else:
+            self.residual = nn.Sequential(
+                nn.Conv2d(
+                    in_channels,
+                    out_channels,
+                    kernel_size=1,
+                    stride=(stride, 1)),
+                nn.BatchNorm2d(out_channels),
+            )
+
+        self.prelu = nn.PReLU()
+
+    def forward(self, x, A):
+
+        res = self.residual(x)
+        x, A = self.gcn(x, A)
+
+        x = self.tcn(x) + res
+
+        if not self.use_mdn:
+            x = self.prelu(x)
+
+        return x, A
+
+class social_stgcnn(nn.Module):
+    def __init__(self, n_stgcnn=1, n_txpcnn=1, input_feat=512, output_feat=128,
+                 seq_len=15, pred_seq_len=1, kernel_size=3):
+        super(social_stgcnn, self).__init__()
+        self.n_stgcnn = n_stgcnn
+        self.n_txpcnn = n_txpcnn
+        self.max_nodes = 1
+        self.seq_len = seq_len
+        self.edge_importance_weighting = True
+
+        # self.convolution = nn.Conv2d(512, 18, kernel_size=1, stride=1)
+        # self.batch = nn.BatchNorm2d(18)
+        # self.dropout = nn.Dropout(p=0.5)
+
+        # self.data_bn = nn.BatchNorm1d(input_feat*self.max_nodes)
+        # self.data_bn_loc = nn.BatchNorm1d(4*self.max_nodes)
+        #
+        self.st_gcn_networks = nn.ModuleList((
+            st_gcn(512*7*7, 64, (kernel_size, seq_len), 1, residual=False, dropout=0.5),
+            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
+            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
+            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
+            st_gcn(64, 128, (kernel_size, seq_len), 2, dropout=0.5),
+            st_gcn(128, 128, (kernel_size, seq_len), 1, dropout=0.5),
+            # st_gcn(128, 128, (kernel_size, seq_len), 1, dropout=0.5),
+            # st_gcn(128, 256, (kernel_size, seq_len), 2, dropout=0.5),
+            # st_gcn(256, 256, (kernel_size, seq_len), 1, dropout=0.5),
+            # st_gcn(256, 256, (kernel_size, seq_len), 1, dropout=0.5),
+        ))
+        self.st_gcn_networks_loc = nn.ModuleList((
+            st_gcn(4, 64, (kernel_size, seq_len), 1, residual=False, dropout=0.5),
+            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
+            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
+            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
+            st_gcn(64, 128, (kernel_size, seq_len), 2, dropout=0.5),
+            st_gcn(128, 128, (kernel_size, seq_len), 1, dropout=0.5),
+            # st_gcn(128, 128, (kernel_size, seq_len), 1, dropout=0.5),
+            # st_gcn(128, 256, (kernel_size, seq_len), 2, dropout=0.5),
+            # st_gcn(256, 256, (kernel_size, seq_len), 1, dropout=0.5),
+            # st_gcn(256, 256, (kernel_size, seq_len), 1, dropout=0.5),
+        ))
+        # self.seed = 12
+        # torch.manual_seed(self.seed)
+        # torch.cuda.manual_seed(self.seed)
+        # # initialize parameters for edge importance weighting
+        # if self.edge_importance_weighting:
+        #     self.edge_importance = nn.ParameterList([
+        #         nn.Parameter(torch.ones(seq_len, self.max_nodes, self.max_nodes, requires_grad=True))
+        #         for i in self.st_gcn_networks
+        #     ])
+        #
+        # else:
+        #     self.edge_importance = [1] * len(self.st_gcn_networks)
+
+        # self.pool = nn.MaxPool2d(kernel_size=2)
+        # self.flatten = nn.Flatten()
+        self.bn = nn.BatchNorm1d(256)
+        self.dec = nn.LSTM(256, output_feat, num_layers=1, bias=True,
+                           batch_first=True, bidirectional=False)
+
+        nn.init.xavier_normal_(self.dec.weight_hh_l0)
+        self.dropout_dec = nn.Dropout(p=0.4)
+
+        self.fcn = nn.Linear(output_feat, pred_seq_len)
+        nn.init.xavier_normal_(self.fcn.weight)
+
+    def forward(self, v, a, loc):
+
+        b, t, n, c, h, w = v.size()
+        v = v.permute(0, 3, 4, 5, 1, 2).contiguous()
+        v = v.view(b, c*h*w, t, n)
+        loc = loc.permute(0, 3, 1, 2).contiguous()
+
+        for graph in self.st_gcn_networks:
+            v, _ = graph(v, a)
+
+        # print(loc.shape)
+        for graph in self.st_gcn_networks_loc:
+            loc, _ = graph(loc, a)
+
+        v = v.permute(0, 2, 1, 3).contiguous()
+        v = v.view(b*t, -1, n)
+        v = F.avg_pool1d(v, v.size()[2])
+        v = v.reshape(b, t, -1)
+
+        loc = loc.permute(0, 2, 1, 3).contiguous()
+        loc = loc.view(b*t, -1, n)
+        loc = F.avg_pool1d(loc, loc.size()[2])
+        loc = loc.reshape(b, t, -1)
+
+        x = torch.cat((v, loc), dim=2)
+
+        x = self.bn(x.permute(0, 2, 1).contiguous())
+        x = x.permute(0, 2, 1).contiguous()
+
+        x, _ = self.dec(x)
+        x = torch.tanh(self.dropout_dec(x))
+
+        x = self.fcn(x[:, -1])
+        x = x.view(x.size(0), -1)
+
+        return x
+
