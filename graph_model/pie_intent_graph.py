@@ -724,7 +724,7 @@ class PIEIntent(object):
         print('epoch-15')
         overlap = 0  # train_params ['overlap']
         # print(test_model.eval())
-        def visualisation(seq_len, nodes, img_centre_seq):
+        def visualisation(seq_len, nodes, img_centre_seq, details):
             '''
             This creates visulasation as star graph
             :param seq_len: Length of the input sequence
@@ -754,6 +754,16 @@ class PIEIntent(object):
                 img_cp_p = img_centre_seq[s][0]
                 cv2.circle(img, (int(img_cp_p[0]), int(img_cp_p[1])),
                            radius=0, color=(0, 0, 255), thickness=25)
+                if details[0] == 0:
+                     x1 = 'GT:notcrossing'
+                     x2 = 'Pred:crossing'
+                else:
+                    x1 = 'GT:crossing'
+                    x2 = 'Pred:notcrossing'
+
+                cv2.putText(img, x1 + '\n' + x2, ((int(img_cp_p[0]) - 20, int(img_cp_p[1] - 20))),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9,
+                            (255, 0, 0), 2)
 
                 secondary_nodes = []
 
@@ -812,10 +822,12 @@ class PIEIntent(object):
                 outputs = test_model(G, A, loc)
                 #
                 if int(np.asarray(label.data.to('cpu'))) != int(np.round(torch.sigmoid(outputs).data.to('cpu'))):
+                    details = [int(np.asarray(label.data.to('cpu'))),
+                               int(np.round(torch.sigmoid(outputs).data.to('cpu')))]
                     print(count)
                     print(ped_ids)
                     print(image)
-                    visualisation(15, nodes, img_centre_seq)
+                    visualisation(15, nodes, img_centre_seq, details)
                     some_count += 1
 
 
