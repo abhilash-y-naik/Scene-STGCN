@@ -32,8 +32,8 @@ class Dataset(torch.utils.data.Dataset):
         self.unique_bbox = self.dataset['unique_bbox']
         self.unique_image = self.dataset['unique_image']
 
-        self.pedestrian_nodes = 1
-        self.vehicle_nodes = 0
+        self.pedestrian_nodes = 3
+        self.vehicle_nodes = 3
         self.traffic_light_nodes = 0
         self.sign_nodes = 0
         self.crosswalk_nodes = 0
@@ -61,7 +61,7 @@ class Dataset(torch.utils.data.Dataset):
                                   model_name='vgg16_bn',
                                   data_subset=self.data_type, ind=1)
 
-        variable = True
+        variable = False
         if variable:
             vgg16 = models.vgg16_bn().cuda()
             vgg16.load_state_dict(torch.load("./pretrained_models/vgg16_bn-6c64b313.pth"))
@@ -222,50 +222,95 @@ class Dataset(torch.utils.data.Dataset):
                     bbox_location_seq.append(bbox_location.copy())  # BBox location
                     img_centre_seq.append(img_centre.copy())  # Bounding box centre location
 
-
                 all_node_features_seq = []
+                bbox_location_all_node = []
+                img_centre_all_node = []
                 for s in range(self.seq_len):
 
                     all_node_features = []
+                    bbox_location_seq_all_node = []
+                    img_centre_seq_all_node = []
                     for k in node_features[0]:
                         if k == 'pedestrian':
-                            for num, saving_nodes in enumerate(node_features[s][k]):
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
                                 if num < self.pedestrian_nodes:
-                                    all_node_features.append(saving_nodes)
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
+
                         if k == 'vehicle':
-                            for num, saving_nodes in enumerate(node_features[s][k]):
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
                                 if num < self.vehicle_nodes:
-                                    all_node_features.append(saving_nodes)
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
+
                         if k == 'traffic_light':
-                            for num, saving_nodes in enumerate(node_features[s][k]):
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
                                 if num < self.traffic_light_nodes:
-                                    all_node_features.append(saving_nodes)
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+
                         if k == 'transit_station':
-                            for num, saving_nodes in enumerate(node_features[s][k]):
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
                                 if num < self.transit_station_nodes:
-                                    all_node_features.append(saving_nodes)
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
+
                         if k == 'sign':
-                            for num, saving_nodes in enumerate(node_features[s][k]):
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
                                 if num < self.sign_nodes:
-                                    all_node_features.append(saving_nodes)
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
+
                         if k == 'crosswalk':
-                            for num, saving_nodes in enumerate(node_features[s][k]):
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
                                 if num < self.crosswalk_nodes:
-                                    all_node_features.append(saving_nodes)
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
 
                         if k == 'ego_vehicle':
-                            for num, saving_nodes in enumerate(node_features[s][k]):
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
                                 if num < self.ego_vehicle_node:
-                                    all_node_features.append(saving_nodes)
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
 
                     all_node_features_seq.append(all_node_features)
+                    bbox_location_all_node.append(bbox_location_seq_all_node)
+                    img_centre_all_node.append(img_centre_seq_all_node)
+
+                    # self.visualisation(15, node_features, img_centre_seq)
 
                 self.feature_save_folder = 'U:/thesis_code/data/nodes_and_features/' + str(self.data_type)
                 self.feature_save_path = os.path.join(self.feature_save_folder, str(i) + '.pkl')
                 if not os.path.exists(self.feature_save_folder):
                     os.makedirs(self.feature_save_folder)
                 with open(self.feature_save_path, 'wb') as fid:
-                    pickle.dump((img_centre_seq, all_node_features_seq, bbox_location_seq), fid,
+                    pickle.dump((img_centre_seq, all_node_features_seq, bbox_location_all_node), fid,
                                 pickle.HIGHEST_PROTOCOL)
 
     def __getitem__(self, index):
@@ -411,46 +456,46 @@ class Dataset(torch.utils.data.Dataset):
 
         max_nodes = self.max_nodes
 
-        decoder_input = np.zeros((self.seq_len, 1, len(bbox_location_seq[0][0])))
+        decoder_input = np.zeros((self.seq_len, max_nodes, len(bbox_location_seq[0][0])))
         # decoder_input = np.zeros((self.seq_len, len(bbox_location_seq[0][0])))
         graph = np.zeros((self.seq_len, max_nodes, 512, 7, 7))
         adj_matrix = np.zeros((self.seq_len, max_nodes, max_nodes))
-        adj_matrix_spatial = np.zeros((max_nodes, max_nodes))
+        adj_matrix_spatial = np.zeros((self.seq_len, max_nodes, max_nodes))
         # adj_matrix = np.zeros((max_nodes, max_nodes))
 
         for s in range(self.seq_len):
 
-
             step = node_features[s]
-            bbox_location = bbox_location_seq[s]['pedestrian']
-            decoder_input[s, :] = bbox_location[0]
-
+            bbox_location = bbox_location_seq[s]
+            # decoder_input[s, :] = bbox_location[0]
             for h, stp in enumerate(step):
-                    with open(str(stp[0]), 'rb') as fid:
-                        try:
-                            img_features = pickle.load(fid)
-                        except:
-                            img_features = pickle.load(fid, encoding='bytes')
+                with open(str(stp[0]), 'rb') as fid:
+                    try:
+                        img_features = pickle.load(fid)
 
-                    img_features = np.squeeze(img_features)
-                    graph[s, h, :] = img_features
-                    adj_matrix[s, h, h] = 1
-                    adj_matrix_spatial[h, h] = 1
+                    except:
+                        img_features = pickle.load(fid, encoding='bytes')
 
-                    if h > 0:
-                        # adj_matrix[s, h, h] = 2
-                        # img_cp_s = img_centre_seq[s][h]
-                        # l2_norm = self.anorm(img_cp_p, img_cp_s)
-                        adj_matrix[s, h, 0] = 1  # l2_norm
-                        adj_matrix[s, 0, h] = 1  # l2_norm
-                        adj_matrix_spatial[h, 0] = 1
-                        adj_matrix_spatial[0, h] = 1
+                img_features = np.squeeze(img_features)
+                graph[s, h, :] = img_features
+                decoder_input[s, h, :] = bbox_location[h]
+                adj_matrix[s, h, h] = 1
+                adj_matrix_spatial[s, h, h] = 1
+
+                if h > 0:
+                    # adj_matrix[s, h, h] = 2
+                    # img_cp_s = img_centre_seq[s][h]
+                    # l2_norm = self.anorm(img_cp_p, img_cp_s)
+                    adj_matrix[s, h, 0] = 1  # l2_norm
+                    adj_matrix[s, 0, h] = 1  # l2_norm
+                    adj_matrix_spatial[s, h, 0] = 1
+                    adj_matrix_spatial[s, 0, h] = 1
 
             # g = nx.from_numpy_matrix(adj_matrix[s, :, :])
             # adj_matrix[s, :, :] = self.normalized_laplacian_matrix(g).toarray()
             adj_matrix[s, :, :] = self.normalize_undigraph(adj_matrix[s, :, :])
             # print(adj_matrix[s,:,:])
-        adj_matrix_spatial = self.normalize_undigraph(adj_matrix_spatial)
+            adj_matrix_spatial[s, :, :] = self.normalize_undigraph(adj_matrix_spatial[s, :, :])
         # print(adj_matrix)
         if visualise:
             self.visualisation(self.seq_len, node_features, img_centre_seq)

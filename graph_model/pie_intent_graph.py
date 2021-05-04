@@ -4,6 +4,7 @@ import math
 import networkx as nx
 import pickle
 import time
+import cv2
 import torch
 import numpy as np
 import random
@@ -27,12 +28,12 @@ from graph_model.utils import *
 
 
 # from graph_model.model import *
-from graph_model.model_conv import *
-from graph_model.dataset_model_conv import Dataset
+# from graph_model.model import *
+# from graph_model.dataset_model_conv import Dataset
 
 
-# from graph_model.dataset import Dataset, Dataset_test
-# from graph_model.model_conv_spatial import *
+from graph_model.dataset import Dataset, Dataset_test
+from graph_model.model_conv_spatial import *
 
 from matplotlib import pyplot
 
@@ -319,7 +320,7 @@ class PIEIntent(object):
         # data_opts['seq_overlap_rate']
         seq_length = data_opts['max_size_observe']
         train_d = self.get_train_val_data(data_train, data_type, seq_length, 0.5)
-        val_d = self.get_train_val_data(data_val, data_type, seq_length, 1)
+        val_d = self.get_train_val_data(data_val, data_type, seq_length, 0)
 
         self._encoder_seq_length = train_d['decoder_input'].shape[1]
         self._decoder_seq_length = train_d['decoder_input'].shape[1]
@@ -333,11 +334,11 @@ class PIEIntent(object):
         #     np.random.seed(12)
         # , worker_init_fn = _init_fn
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                                   batch_size=1, shuffle=True, num_workers=0,
+                                                   batch_size=56, shuffle=True, num_workers=4,
                                                    pin_memory=False)
 
         val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                                batch_size=1, shuffle=False, num_workers=1,
+                                                batch_size=56, shuffle=False, num_workers=4,
                                                 pin_memory=False)
 
         # automatically generate model name as a time string
@@ -450,21 +451,20 @@ class PIEIntent(object):
             batch_losses = []
             y_true = []
             y_pred = []
-            for step, (graph, adj_matrix, adj_matrix_s, location, label) in enumerate(train_loader):
+            for step, (graph, adj_matrix, location, label) in enumerate(train_loader):
                 if count % 10 == 0:
                     print(count)
                 count = count + 1
 
-
                 G = Variable(graph.type(torch.FloatTensor)).cuda()
                 A = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                A_s = Variable(adj_matrix_s.type(torch.FloatTensor)).cuda()
+                # A_s = Variable(adj_matrix_s.type(torch.FloatTensor)).cuda()
                 Loc = Variable(location.type(torch.FloatTensor)).cuda()
                 label = Variable(label.type(torch.float)).cuda()
                 # print(label.shape)
                 # outputs, _ = train_model(G, A.squeeze(0))
                 # print(A)
-                outputs = train_model(G, A, A_s, Loc)
+                outputs = train_model(G, A, Loc)
 
                 # if count % batch_size != 0 and step != turn_point_train:
                 #     l = loss_fn(outputs, label)
@@ -489,7 +489,7 @@ class PIEIntent(object):
                 # loss += 0.05 * torch.norm(l2_enc, p=2) + \
                 #         0.05* torch.norm(l2_enc_loc, p=2) + \
                 #         0.05 * torch.norm(l2_dec, p=2)
-                batch_losses.append(loss.data.cpu().numpy())
+                batch_losses.append(loss.detach().item())
 
                 optimizer.zero_grad()  # (reset gradients)
                 loss.backward()  # (compute gradients)
@@ -559,7 +559,7 @@ class PIEIntent(object):
             y_pred = []
             val_loss = 0
             count = 0
-            for step, (graph, adj_matrix, adj_matrix_s, location, label) in enumerate(val_loader):
+            for step, (graph, adj_matrix, location, label) in enumerate(val_loader):
                 with torch.no_grad():
                     if count % 10 == 0:
                         print(count)
@@ -567,13 +567,13 @@ class PIEIntent(object):
 
                     G = Variable(graph.type(torch.FloatTensor)).cuda()
                     A = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                    A_s = Variable(adj_matrix_s.type(torch.FloatTensor)).cuda()
+                    # A_s = Variable(adj_matrix_s.type(torch.FloatTensor)).cuda()
                     Loc = Variable(location.type(torch.FloatTensor)).cuda()
                     label = Variable(label.type(torch.float)).cuda()
                     # print(label.shape)
                     # outputs, _ = train_model(G, A.squeeze(0))
                     # print(A)
-                    outputs = train_model(G, A, A_s, Loc)
+                    outputs = train_model(G, A, Loc)
                     # print(outputs.shape)
 
                     # if count % batch_size != 0 and step != turn_point_val:
@@ -678,7 +678,7 @@ class PIEIntent(object):
 
         train_params = configs[1]
         seq_length = configs[2]['max_size_observe']
-
+        overlap = 0
         tracks, images, bboxes, ped_ids, frame_ids = self.get_tracks(data_test,
                                                           train_params['data_type'],
                                                           seq_length,
@@ -698,11 +698,11 @@ class PIEIntent(object):
                 'decoder_input': decoder_input,
                 'output': output}
 
-        test_dataset = Dataset(data_test, test_d, data_opts, 'test', regen_pkl=False)
+        test_dataset = Dataset_test(data_test, test_d, data_opts, 'test', regen_pkl=False)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-                                                  batch_size=128, shuffle=False,
-                                                  pin_memory=True,
-                                                  num_workers=4)
+                                                  batch_size=1, shuffle=False,
+                                                  pin_memory=False,
+                                                  num_workers=0)
 
         test_model = self.get_model(test_dataset.max_nodes)
 
@@ -720,10 +720,62 @@ class PIEIntent(object):
         #################################################################################################
         # test_model.load_state_dict(pretrained_dict) # comment this line if you are using above code
 
-        test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_70.pth')))
-        print('epoch-70')
-        overlap = 0.5  # train_params ['overlap']
+        test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_15.pth')))
+        print('epoch-15')
+        overlap = 0  # train_params ['overlap']
         # print(test_model.eval())
+        def visualisation(seq_len, nodes, img_centre_seq):
+            '''
+            This creates visulasation as star graph
+            :param seq_len: Length of the input sequence
+            :param ped_ids: This will be matched to create the primary node
+            :param nodes: All the nodes in the sequence
+            :param img_centre_seq: To draw the circles to denote nodes
+            '''
+            sorted_img = []
+            # print(img_centre_seq)
+            path = 'E:\PIE_dataset\images'
+            for s in range(seq_len):
+
+                step = nodes[s]
+
+                img_p = str(step[0][0][0])
+                img_p = img_p.replace(os.sep, '/')
+                # print(img_p)
+                img_p1 = img_p.split('/')[-3:]
+                # print(img_p1)
+                img_p2 = img_p1[2].split('_')[0]
+                img_p = os.path.join(*img_p1[:-1])
+                # print(img_p)
+                img_p = os.path.join(path, img_p, img_p2 + '.png')
+                img = cv2.imread(img_p)
+                # print(img_p)
+                # exit()
+                img_cp_p = img_centre_seq[s][0]
+                cv2.circle(img, (int(img_cp_p[0]), int(img_cp_p[1])),
+                           radius=0, color=(0, 0, 255), thickness=25)
+
+                secondary_nodes = []
+
+                for h, stp in enumerate(step):
+                    if h > 0:
+                        img_cp_s = img_centre_seq[s][h]
+                        secondary_nodes.append(img_cp_s)
+                        cv2.circle(img, (int(img_cp_s[0]), int(img_cp_s[1])),
+                                   radius=0, color=(0, 255, 0), thickness=25)
+
+                for img_cp_s in secondary_nodes:
+                        cv2.line(img, (int(img_cp_p[0]), int(img_cp_p[1])), (int(img_cp_s[0]), int(img_cp_s[1])),
+                                 [255, 0, 0], 2)
+
+                sorted_img.append(img)
+
+            out = cv2.VideoWriter("%s/%s_%s_%s.avi" % ("U:/thesis_code/error/",
+                                                       img_p1[0], img_p1[1], img_p2),
+                                  cv2.VideoWriter_fourcc(*"MJPG"), 15, (1920, 1080))
+            for img_id in sorted_img:
+                out.write(img_id)
+            out.release()
 
         for name, param in test_model.named_parameters():
             # if name == 'edge_importance.0':
@@ -736,15 +788,15 @@ class PIEIntent(object):
         # test_model.eval()  # (set in evaluation mode, this affects BatchNorm and dropout)
 
         count = 0
-
+        some_count = 0
         # counting_negatives = 0
         y_true = []
         y_pred = []
         new_pred = []
-        for step, (graph, adj_matrix, location, label) in enumerate(test_loader):
+        for step, (graph, adj_matrix, location, label, ped_ids, image, nodes, img_centre_seq) in enumerate(test_loader):
             with torch.no_grad():
-                if count % 10 == 0:
-                    print(count)
+                # if count % 100 == 0:
+                #     print(count)
                 count += 1
 
                 G = Variable(graph.type(torch.FloatTensor)).cuda()
@@ -752,12 +804,21 @@ class PIEIntent(object):
                 loc = Variable(location.type(torch.FloatTensor)).cuda()
                 label = Variable(label.type(torch.float)).cuda()
 
+
                 # if int(label) == 0:
                 #     counting_negatives += 1
                 # print(label.shape)
                 # outputs, _ = test_model(G, A.squeeze(0))
                 outputs = test_model(G, A, loc)
                 #
+                if int(np.asarray(label.data.to('cpu'))) != int(np.round(torch.sigmoid(outputs).data.to('cpu'))):
+                    print(count)
+                    print(ped_ids)
+                    print(image)
+                    visualisation(15, nodes, img_centre_seq)
+                    some_count += 1
+
+
                 y_true.append(np.asarray(label.data.to('cpu')))
                 # y_pred.append(np.where(torch.sigmoid(outputs).data.to('cpu') > 0.5, 1, 0))
                 y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
@@ -766,6 +827,7 @@ class PIEIntent(object):
         # print('intention of crossing:', counting_negatives)
         y_true = np.concatenate(y_true, axis=0)
         y_pred = np.concatenate(y_pred, axis=0)
+        print(some_count)
         # print(y_pred)
         # print(y_true)
         # new_pred = np.concatenate(new_pred, axis=0)

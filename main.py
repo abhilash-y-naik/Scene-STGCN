@@ -90,7 +90,7 @@ def train_intent(train_test, model, data_path):
 
         t = PIEIntent()
 
-        pretrained_model_path = 'data/graph/intention/20Apr2021-00h15m49s'
+        pretrained_model_path = 'data/graph/intention/04May2021-13h33m16s'
         # pretrained_model_path = 'graph_model/pretrained weight'
         if train_test < 2:  # Train
 
@@ -125,7 +125,7 @@ def train_intent(train_test, model, data_path):
 
             saved_files_path = t.train(data_train=beh_seq_train,
                                        data_val=beh_seq_val,
-                                       epochs=100,
+                                       epochs=25,
                                        batch_size=128,
                                        data_opts=data_opts)
 
@@ -180,7 +180,7 @@ def main(train_test=2, model=1, data_path='./PIE_dataset'):
 if __name__ == '__main__':
 
     try:
-        train_test = int(0)  # train_test: 0 - train only, 1 - train and test, 2 - test only
+        train_test = int(2)  # train_test: 0 - train only, 1 - train and test, 2 - test only
         model = int(1)  # model:0 - PIE, model:1 - Graph
         data_path = './PIE_dataset'  # Path of the split images
 

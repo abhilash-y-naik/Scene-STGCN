@@ -6,47 +6,47 @@ from keras.preprocessing.image import img_to_array, load_img
 from torch.autograd import Variable
 import tarfile
 
-fname = './graph_model/checkpoints/best_deeplabv3plus_mobilenet_cityscapes_os16.pth'
-
-from graph_model import network
-model = network.deeplabv3plus_mobilenet(num_classes=19, output_stride=16).cuda()
-model.load_state_dict(torch.load(fname)["model_state"])
-pic = './graph_model/Screenshot.png'
-img_data = load_img(pic)
-# print(img_data.shape)
-image_array = img_to_array(img_data).reshape(3, 768, 1366)
+# fname = './graph_model/checkpoints/best_deeplabv3plus_mobilenet_cityscapes_os16.pth'
+#
+# from graph_model import network
+# model = network.deeplabv3plus_mobilenet(num_classes=19, output_stride=16).cuda()
+# model.load_state_dict(torch.load(fname)["model_state"])
+# pic = './graph_model/Screenshot.png'
+# img_data = load_img(pic)
+# # print(img_data.shape)
+# image_array = img_to_array(img_data).reshape(3, 768, 1366)
+# # print(image_array.shape)
+# image_array = Variable(torch.from_numpy(image_array).unsqueeze(0)).float().cuda()
 # print(image_array.shape)
-image_array = Variable(torch.from_numpy(image_array).unsqueeze(0)).float().cuda()
-# print(image_array.shape)
-image_features = model(image_array)
-image_features = image_features.data.to('cpu').numpy()
+# image_features = model(image_array)
+# image_features = image_features.data.to('cpu').numpy()
 # print(model.eval())
-print(image_features.shape)
-exit()
+# print(image_features.shape)
+# exit()
 np.random.seed(2)
-from graph_model.pie_data import PIE
-
-data_opts = {'fstride': 1,
-             'sample_type': 'all',
-             'height_rng': [0, float('inf')],
-             'squarify_ratio': 0,
-             'data_split_type': 'default',  # kfold, random, default
-             'seq_type': 'intention',  # crossing , intention
-             'min_track_size': 0,  # discard tracks that are shorter
-             'max_size_observe': 15,  # number of observation frames
-             'max_size_predict': 5,  # number of prediction frames
-             'seq_overlap_rate': 0.5,  # how much consecutive sequences overlap
-             'balance': True,  # balance the training and testing samples
-             'crop_type': 'context',  # crop 2x size of bbox around the pedestrian
-             'crop_mode': 'pad_resize',  # pad with 0s and resize to VGG input
-             'encoder_input_type': [],
-             'decoder_input_type': ['bbox'],
-             'output_type': ['intention_binary']
-             }
-
-imdb = PIE(data_path= './PIE_dataset')
-beh_seq_train = imdb.generate_data_trajectory_sequence('train', **data_opts)
-beh_seq_train = imdb.balance_samples_count(beh_seq_train, label_type='intention_binary')
+# from graph_model.pie_data import PIE
+#
+# data_opts = {'fstride': 1,
+#              'sample_type': 'all',
+#              'height_rng': [0, float('inf')],
+#              'squarify_ratio': 0,
+#              'data_split_type': 'default',  # kfold, random, default
+#              'seq_type': 'intention',  # crossing , intention
+#              'min_track_size': 0,  # discard tracks that are shorter
+#              'max_size_observe': 15,  # number of observation frames
+#              'max_size_predict': 5,  # number of prediction frames
+#              'seq_overlap_rate': 0.5,  # how much consecutive sequences overlap
+#              'balance': True,  # balance the training and testing samples
+#              'crop_type': 'context',  # crop 2x size of bbox around the pedestrian
+#              'crop_mode': 'pad_resize',  # pad with 0s and resize to VGG input
+#              'encoder_input_type': [],
+#              'decoder_input_type': ['bbox'],
+#              'output_type': ['intention_binary']
+#              }
+#
+# imdb = PIE(data_path= './PIE_dataset')
+# beh_seq_train = imdb.generate_data_trajectory_sequence('train', **data_opts)
+# beh_seq_train = imdb.balance_samples_count(beh_seq_train, label_type='intention_binary')
 
 # def normalize_undigraph(A):
 #     Dl = np.sum(A, 0)
@@ -69,7 +69,7 @@ beh_seq_train = imdb.balance_samples_count(beh_seq_train, label_type='intention_
 #             Dn[i, i] = Dl[i]**(-1)
 #     AD = np.dot(A, Dn)
 #     return AD
-# x = np.random.randint(1,5,size=(1, 5, 3, 2, 2, 2))
+x = np.random.randint(1,5,size=(5, 4, 3))
 # A = np.random.randint(0,2,size=(1, 5, 3, 3))
 # importance = np.random.randint(2,3,size=(5,1,1))
 # A = np.zeros((3,3))
@@ -78,12 +78,12 @@ beh_seq_train = imdb.balance_samples_count(beh_seq_train, label_type='intention_
 # A[2, 0] = 1
 # A[0, 1] = 1
 # A[0, 2] = 1
-# x = torch.from_numpy(x)
+x = torch.from_numpy(x)
 # A = torch.from_numpy(A)
 # print(importance)
-# print('x\n',x)
-# # x1 = x.permute(0,2,1,3)
-# # print('x\n',x1)
+print('x\n', x)
+x1 = torch.sum(x,dim=2).reshape(5,-1)
+print('x\n', x1)
 # # x2 = x.permute(0,2,1,3).contiguous()
 # # print('x\n',x2)
 #

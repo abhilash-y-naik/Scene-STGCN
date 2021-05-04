@@ -1,7 +1,9 @@
 .idea
 visualisation
+error
 pretrained_models/*
 data/data/graph/*
+data/data/graph.zip/*
 data/data/pie/*
 data/graph/*
 data/nodes_and_features/*

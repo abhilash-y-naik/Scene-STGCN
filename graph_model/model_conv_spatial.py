@@ -63,10 +63,10 @@ class ConvTemporalGraphical(nn.Module):
 
     def forward(self, x, A):
         # assert A.size(1) == self.kernel_size
-        b, n, c, h, w = x.size()
-        x = self.conv(x.view(b*n, c, h, w))
-        _, c, h, w = x.size()
-        x = x.view(b, n, c, h, w)
+        # b, n, c, h, w = x.size()
+        # x = self.conv(x.view(b*n, c, h, w))
+        # _, c, h, w = x.size()
+        # x = x.view(b, n, c, h, w)
 
         x = torch.einsum('nvchl,nvw->nwchl', (x, A))
 
@@ -251,31 +251,26 @@ class social_stgcnn(nn.Module):
     '''
 
     def __init__(self,
-                 num_hidden_units=128,
-                 decoder_seq_length=15,
-                 lstm_dropout=0.4,
-                 convlstm_num_filters=64,
-                 convlstm_kernel_size=2,
-                 ):
+                    max_nodes):
         super(social_stgcnn, self).__init__()
 
         # Learning rate params
         # self.lr_params = learning_rate_params
 
         # Network parameters
-        self._num_hidden_units = num_hidden_units
+        self._num_hidden_units = 128
 
         # Encoder
-        self._lstm_dropout = int(lstm_dropout)
+        self._lstm_dropout = int(0.4)
 
         # conv unit parameters
-        self._convlstm_num_filters = convlstm_num_filters
-        self._convlstm_kernel_size = convlstm_kernel_size
+        self._convlstm_num_filters = 64
+        self._convlstm_kernel_size = 2
 
         # decoder unit parameters
         self._decoder_dense_output_size = 1
         self._decoder_input_size = 4  # decided on run time according to data
-        self._decoder_seq_length = decoder_seq_length
+        self._decoder_seq_length = 15
 
         # Generate Encoder LSTM Unit
         self.encoder_model = ConvLSTM2D(512, self._convlstm_num_filters, dropout=self._lstm_dropout, kernel_size=(2, 2), num_layers=1,
@@ -302,7 +297,7 @@ class social_stgcnn(nn.Module):
             ))
 
         self.edge_importance_weighting = True
-        self.max_nodes = 1
+        self.max_nodes = max_nodes
         # initialize parameters for edge importance weighting
         if self.edge_importance_weighting:
             self.edge_importance = nn.ParameterList([
@@ -339,7 +334,9 @@ class social_stgcnn(nn.Module):
 
         output = output.permute(0, 2, 3, 4, 1).contiguous()
         output = output.view(B, C * H * W, N)
-        output = F.avg_pool1d(output, output.size()[2])
+        # output = F.avg_pool1d(output, output.size()[2])
+        output = torch.sum(output, dim=2)
+
 
         # output = output.view(B, N * C * H * W)
         output = self.encoder_output(output)

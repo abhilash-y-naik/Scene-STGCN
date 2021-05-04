@@ -195,10 +195,10 @@ class gcn_spatial(nn.Module):
 
     def forward(self, x, A):
         # assert A.size(1) == self.kernel_size
-        # b, n, c, h, w = x.size()
-        # x = self.conv(x.view(b*n, c, h, w))
-        # _, c, h, w = x.size()
-        # x = x.view(b, n, c, h, w)
+        b, n, c, h, w = x.size()
+        x = self.conv(x.view(b*n, c, h, w))
+        _, c, h, w = x.size()
+        x = x.view(b, n, c, h, w)
 
         x = torch.einsum('nvchl,nvw->nwchl', (x, A))
 
@@ -237,19 +237,19 @@ class social_stgcnn(nn.Module):
         else:
             self.edge_importance = [1] * len(self.st_gcn_networks)
 
-        self.gcn_network = nn.ModuleList((
-                gcn_spatial(16, 16, 15),
-            ))
+        # self.gcn_network = nn.ModuleList((
+        #         gcn_spatial(16, 16, 15),
+        #     ))
 
-        # initialize parameters for edge importance weighting
-        if self.edge_importance_weighting:
-            self.edge_importance_gcn = nn.ParameterList([
-                nn.Parameter(torch.ones(self.max_nodes, self.max_nodes, requires_grad=True))
-                for i in self.gcn_network
-            ])
-
-        else:
-            self.edge_importance = [1] * len(self.st_gcn_networks)
+        # # initialize parameters for edge importance weighting
+        # if self.edge_importance_weighting:
+        #     self.edge_importance_gcn = nn.ParameterList([
+        #         nn.Parameter(torch.ones(self.max_nodes, self.max_nodes, requires_grad=True))
+        #         for i in self.gcn_network
+        #     ])
+        #
+        # else:
+        #     self.edge_importance = [1] * len(self.st_gcn_networks)
         # self.pool = nn.MaxPool2d(kernel_size=2)
         self.flatten = nn.Flatten()
         self.dec = nn.LSTM(580, 128, num_layers=1, bias=True,
@@ -267,23 +267,22 @@ class social_stgcnn(nn.Module):
             v, _ = graph(v, a * importance)
 
         b, t, n, c, h, w = v.size()
-        v = v.permute(0, 2, 3, 4, 5, 1).contiguous()
+        v = v.permute(0, 3, 4, 5, 1, 2).contiguous()
 
         # If the sequence information is utilised
-        v = v.view(b * n, -1, t)
-        v = F.avg_pool1d(v, v.size()[2])
+        v = v.view(b, -1, t, n)
+        v = F.avg_pool2d(v, v.size()[2:])
 
-        v = v.view(b, n, c, h, w)
+        # v = v.view(b, c, h, w)
 
-        for graph, importance in zip(self.gcn_network, self.edge_importance_gcn):
-            output, _ = graph(v, a_space * importance)
-        _, _, c, h, w = output.size()
-        output = output.permute(0, 2, 3, 4, 1).contiguous()
-        output = output.view(b, c * h * w, n)
+        # for graph, importance in zip(self.gcn_network, self.edge_importance_gcn):
+        #     output, _ = graph(v, a_space * importance)
+        # _, _, c, h, w = output.size()
+        # output = output.permute(0, 2, 3, 4, 1).contiguous()
+        # output = output.view(b, c * h * w, n)
         # output = F.avg_pool1d(output, output.size()[2])
-        output = torch.sum(output, dim=2)
 
-        output = self.flatten(output)
+        output = self.flatten(v)
 
         repeat_vec = output.repeat(1, self.seq_len).reshape(b, self.seq_len, -1)
         loc = loc.reshape(b, t, -1)
