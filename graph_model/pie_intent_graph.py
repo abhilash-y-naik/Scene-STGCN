@@ -326,10 +326,10 @@ class PIEIntent(object):
         self._decoder_seq_length = train_d['decoder_input'].shape[1]
 
         self._sequence_length = self._encoder_seq_length
-        train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=True)
+        # train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=True)
         # print(train_dataset.max_nodes)
         val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=True)
-        # exit()
+        exit()
         # def _init_fn(worker_id):
         #     np.random.seed(12)
         # , worker_init_fn = _init_fn
@@ -702,7 +702,7 @@ class PIEIntent(object):
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
                                                   batch_size=1, shuffle=False,
                                                   pin_memory=False,
-                                                  num_workers=0)
+                                                  num_workers=4)
 
         test_model = self.get_model(test_dataset.max_nodes)
 
@@ -780,7 +780,7 @@ class PIEIntent(object):
 
                 sorted_img.append(img)
 
-            out = cv2.VideoWriter("%s/%s_%s_%s.avi" % ("U:/thesis_code/error/",
+            out = cv2.VideoWriter("%s/%s_%s_%s.avi" % ("U:/thesis_code/error_4/",
                                                        img_p1[0], img_p1[1], img_p2),
                                   cv2.VideoWriter_fourcc(*"MJPG"), 15, (1920, 1080))
             for img_id in sorted_img:
@@ -803,38 +803,49 @@ class PIEIntent(object):
         y_true = []
         y_pred = []
         new_pred = []
-        for step, (graph, adj_matrix, location, label, ped_ids, image, nodes, img_centre_seq) in enumerate(test_loader):
-            with torch.no_grad():
-                # if count % 100 == 0:
-                #     print(count)
-                count += 1
+        with open(model_path + '/misclassification.txt', 'wt') as fid:
+            fid.write("####### Misclssification #######\n")
 
-                G = Variable(graph.type(torch.FloatTensor)).cuda()
-                A = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                loc = Variable(location.type(torch.FloatTensor)).cuda()
-                label = Variable(label.type(torch.float)).cuda()
+            for step, (graph, adj_matrix, location, label, ped_ids, image, nodes, img_centre_seq) in enumerate(test_loader):
+            # for step, (graph, adj_matrix, location, label) in enumerate(test_loader):
+                with torch.no_grad():
+                    if count % 10 == 0:
+                        print(count)
+                    count += 1
 
-
-                # if int(label) == 0:
-                #     counting_negatives += 1
-                # print(label.shape)
-                # outputs, _ = test_model(G, A.squeeze(0))
-                outputs = test_model(G, A, loc)
-                #
-                if int(np.asarray(label.data.to('cpu'))) != int(np.round(torch.sigmoid(outputs).data.to('cpu'))):
-                    details = [int(np.asarray(label.data.to('cpu'))),
-                               int(np.round(torch.sigmoid(outputs).data.to('cpu')))]
-                    print(count)
-                    print(ped_ids)
-                    print(image)
-                    visualisation(15, nodes, img_centre_seq, details)
-                    some_count += 1
+                    G = Variable(graph.type(torch.FloatTensor)).cuda()
+                    A = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
+                    loc = Variable(location.type(torch.FloatTensor)).cuda()
+                    label = Variable(label.type(torch.float)).cuda()
 
 
-                y_true.append(np.asarray(label.data.to('cpu')))
-                # y_pred.append(np.where(torch.sigmoid(outputs).data.to('cpu') > 0.5, 1, 0))
-                y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
-                # new_pred.append(torch.sigmoid(outputs).data.to('cpu'))
+                    # if int(label) == 0:
+                    #     counting_negatives += 1
+                    # print(label.shape)
+                    # outputs, _ = test_model(G, A.squeeze(0))
+                    outputs = test_model(G, A, loc)
+                    # #
+                    if int(np.asarray(label.data.to('cpu'))) != int(np.round(torch.sigmoid(outputs).data.to('cpu'))):
+                        details = [int(np.asarray(label.data.to('cpu'))),
+                                   int(np.round(torch.sigmoid(outputs).data.to('cpu')))]
+                        fid.write("GT:" + str(np.asarray(label.data.to('cpu'))))
+                        fid.write("\n")
+                        fid.write(str(ped_ids[0]))
+                        fid.write("\n")
+                        fid.write(str(image[0]))
+                        fid.write("\n")
+
+                        print(ped_ids)
+                        print(image)
+                        visualisation(15, nodes, img_centre_seq, details)
+                        some_count += 1
+
+
+                    y_true.append(np.asarray(label.data.to('cpu')))
+                    # y_pred.append(np.where(torch.sigmoid(outputs).data.to('cpu') > 0.5, 1, 0))
+                    y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
+                    # new_pred.append(torch.sigmoid(outputs).data.to('cpu'))
+
 
         # print('intention of crossing:', counting_negatives)
         y_true = np.concatenate(y_true, axis=0)

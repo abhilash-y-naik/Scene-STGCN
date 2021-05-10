@@ -745,10 +745,10 @@ class PIEIntent(object):
         self.load_model_config(configs[0])
 
         test_model = self.get_model(train_params['model'])
-        test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_50.pth')))
+        test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_100.pth')))
         print('epoch:50')
 
-        overlap = 1  # train_params ['overlap']
+        overlap = 0  # train_params ['overlap']
 
         tracks, images, bboxes, ped_ids = self.get_tracks(data_test,
                                                           train_params['data_type'],
@@ -765,7 +765,7 @@ class PIEIntent(object):
                                         output)
 
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-                                                  batch_size=128, shuffle=False, num_workers=8
+                                                  batch_size=128, shuffle=False, num_workers=4
                                                   )
 
         #####################################################################################

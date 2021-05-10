@@ -331,12 +331,11 @@ class social_stgcnn(nn.Module):
 
         for graph, importance in zip(self.st_gcn_networks, self.edge_importance):
             output, _ = graph(output, a * importance)
-
+        #
         output = output.permute(0, 2, 3, 4, 1).contiguous()
         output = output.view(B, C * H * W, N)
         # output = F.avg_pool1d(output, output.size()[2])
         output = torch.sum(output, dim=2)
-
 
         # output = output.view(B, N * C * H * W)
         output = self.encoder_output(output)

@@ -1140,6 +1140,8 @@ class PIE(object):
                 # print(traffic_annots['1_1_1c'])
                 # print(traffic_annots['1_1_2tl'])
                 # exit()
+                if vid != 'video_0003':
+                    continue
                 ext_frames, ext_ped, ext_img, ext_bbox, ext_intent = [], [], [], [], []
                 traffic_ids = []
                 for pid in sorted(pid_annots):
@@ -1163,6 +1165,8 @@ class PIE(object):
                                                                                   frame_ids, boxes,
                                                                                   images, occlusions)
 
+
+
                     ped_ids = [[pid]] * len(boxes)
 
                     if sq_ratio:
@@ -1181,6 +1185,9 @@ class PIE(object):
                     int_prob = [[pid_annots[pid]['attributes']['intention_prob']]] * len(boxes)
                     int_bin = [[int(pid_annots[pid]['attributes']['intention_prob'] > 0.5)]] * len(boxes)
 
+                    if pid == '3_3_317':
+                        print(pid_annots[pid]['attributes']['intention_prob'])
+                        print(int_bin)
                     image_seq.append(images[::seq_stride])
                     box_seq.append(boxes[::seq_stride])
                     occ_seq.append(occlusions[::seq_stride])
@@ -1280,7 +1287,7 @@ class PIE(object):
 
                     class_dict['ego_vehicle'].append(['0'])
                     image_dict['ego_vehicle'].append(image_traf)
-                    bbox_store = [0, 0, 1920, 1080]
+                    bbox_store = [0, 540, 1920, 1080]
                     bbox_dict['ego_vehicle'].append(bbox_store)
 
                         # self._print_dict(class_dict)
