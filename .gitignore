@@ -1,5 +1,6 @@
 .idea
 visualisation
+data_visualisation
 error
 pretrained_models/*
 data/data/graph/*

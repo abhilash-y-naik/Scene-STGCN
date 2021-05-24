@@ -251,12 +251,12 @@ class social_stgcnn(nn.Module):
     '''
 
     def __init__(self,
-                    max_nodes):
+                    max_nodes, node_info):
         super(social_stgcnn, self).__init__()
 
         # Learning rate params
         # self.lr_params = learning_rate_params
-
+        self.node_info = node_info
         # Network parameters
         self._num_hidden_units = 128
 
@@ -276,6 +276,18 @@ class social_stgcnn(nn.Module):
         self.encoder_model = ConvLSTM2D(512, self._convlstm_num_filters, dropout=self._lstm_dropout, kernel_size=(2, 2), num_layers=1,
                  batch_first=True, bias=True, return_all_layers=False)
 
+        # self.encoder_model_ped = ConvLSTM2D(512, self._convlstm_num_filters, dropout=self._lstm_dropout, kernel_size=(2, 2), num_layers=1,
+        #          batch_first=True, bias=True, return_all_layers=False)
+
+        # self.encoder_model_veh = ConvLSTM2D(512, self._convlstm_num_filters, dropout=self._lstm_dropout, kernel_size=(2, 2), num_layers=1,
+        #          batch_first=True, bias=True, return_all_layers=False)
+
+        # self.encoder_model_traf = ConvLSTM2D(512, self._convlstm_num_filters, dropout=self._lstm_dropout, kernel_size=(2, 2), num_layers=1,
+        #          batch_first=True, bias=True, return_all_layers=False)
+
+        # self.encoder_model_egoveh = ConvLSTM2D(512, self._convlstm_num_filters, dropout=self._lstm_dropout, kernel_size=(2, 2), num_layers=1,
+        #          batch_first=True, bias=True, return_all_layers=False)
+
         self.conv = nn.Conv2d(self._convlstm_num_filters, self._convlstm_num_filters,
                               kernel_size=self._convlstm_kernel_size, bias=True)
         nn.init.xavier_normal_(self.conv.weight)
@@ -283,8 +295,8 @@ class social_stgcnn(nn.Module):
         self.dropout = nn.Dropout(p=self._lstm_dropout)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=1)
 
-        self.st_gcn_networks = nn.ModuleList((
-            st_gcn(64, 64, (3, 15), 1, residual=False, dropout=0.5),
+        # self.st_gcn_networks = nn.ModuleList((
+        #     st_gcn(64, 64, (3, 15), 1, residual=False, dropout=0.5),
         #     st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
         # st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
         # st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
@@ -294,19 +306,19 @@ class social_stgcnn(nn.Module):
         # st_gcn(128, 256, (kernel_size, seq_len), 2, dropout=0.5),
         # st_gcn(256, 256, (kernel_size, seq_len), 1, dropout=0.5),
         # st_gcn(256, 256, (kernel_size, seq_len), 1, dropout=0.5),
-            ))
-
-        self.edge_importance_weighting = True
-        self.max_nodes = max_nodes
+        #     ))
+        #
+        # self.edge_importance_weighting = True
+        # self.max_nodes = max_nodes
         # initialize parameters for edge importance weighting
-        if self.edge_importance_weighting:
-            self.edge_importance = nn.ParameterList([
-                nn.Parameter(torch.ones(self.max_nodes, self.max_nodes, requires_grad=True))
-                for i in self.st_gcn_networks
-            ])
-
-        else:
-            self.edge_importance = [1] * len(self.st_gcn_networks)
+        # if self.edge_importance_weighting:
+        #     self.edge_importance = nn.ParameterList([
+        #         nn.Parameter(torch.ones(self.max_nodes, self.max_nodes, requires_grad=True))
+        #         for i in self.st_gcn_networks
+        #     ])
+        #
+        # else:
+        #     self.edge_importance = [1] * len(self.st_gcn_networks)
 
         self.encoder_output = nn.Flatten()
         # self.batch_norm = nn.BatchNorm1d(2308)
@@ -319,23 +331,79 @@ class social_stgcnn(nn.Module):
         self.decoder_dense_output = nn.Linear(self._num_hidden_units, self._decoder_dense_output_size, bias=True)
         nn.init.xavier_normal_(self.decoder_dense_output.weight)
 
+    # ['pedestrian', 'vehicle', 'traffic_light', 'transit_station', 'sign', 'crosswalk', 'ego_vehicle']
     def forward(self, encoder_input, a, decoder_input):
 
         B, T, N, C, H, W = encoder_input.size()
         encoder_input = encoder_input.permute(0, 2, 1, 3, 4, 5).contiguous()
-        output = encoder_input.view((B*N, T, C, H, W))
+        # num_final = num + self.node_info['pedestrian']
+        # b, n, T, C, H, W = encoder_input.size()
+        output = encoder_input.view(B*N, T, C, H, W)
         _, output = self.encoder_model(output)
         output = self.pool(output)
         _, C, H, W = output.size()
         output = output.view(B, N, C, H, W)
 
-        for graph, importance in zip(self.st_gcn_networks, self.edge_importance):
-            output, _ = graph(output, a * importance)
+        # num = 0
+        # num_final = num + self.node_info['pedestrian']
+        # seperate_x = encoder_input[:, num:num_final].contiguous()
+        # b, n, T, C, H, W = seperate_x.size()
+        # output = seperate_x.view(b*n, T, C, H, W)
+        # _, output = self.encoder_model_ped(output)
+        # output = self.pool(output)
+        # _, C, H, W = output.size()
+        # output_ped = output.view(b, n, C, H, W)
         #
-        output = output.permute(0, 2, 3, 4, 1).contiguous()
-        output = output.view(B, C * H * W, N)
+        # if self.node_info['vehicle'] > 0:
+        #     num = num_final
+        #     num_final = num+self.node_info['vehicle']
+        #     seperate_x = encoder_input[:, num:num_final].contiguous()
+        #     b, n, T, C, H, W = seperate_x.size()
+        #     output = seperate_x.view(b*n, T, C, H, W)
+        #     _, output = self.encoder_model_veh(output)
+        #     output = self.pool(output)
+        #     _, C, H, W = output.size()
+        #     output_veh = output.view(b, n, C, H, W)
+        #     output_ped = torch.cat((output_ped, output_veh), dim=1)
+        #
+        # if self.node_info['crosswalk'] > 0 or self.node_info['sign'] > 0 \
+        # or self.node_info['transit_station'] or self.node_info['traffic_light']:
+        #     num = num_final
+        #     num_final = num+self.node_info['crosswalk']+ self.node_info['sign']+\
+        #                     self.node_info['transit_station']+self.node_info['traffic_light']
+        #
+        #     seperate_x = encoder_input[:, num: num_final].contiguous()
+        #
+        #     b, n, T, C, H, W = seperate_x.size()
+        #     output = seperate_x.view(b*n, T, C, H, W)
+        #     _, output = self.encoder_model_traf(output)
+        #     output = self.pool(output)
+        #     _, C, H, W = output.size()
+        #     output_traf = output.view(b, n, C, H, W)
+        #     output_ped = torch.cat((output_ped, output_traf), dim=1)
+        #
+        # if self.node_info['ego_vehicle'] == 1:
+        #
+        #     num_final = -1
+        #     seperate_x = encoder_input[:, num_final:].contiguous()
+        #     b, n, T, C, H, W = seperate_x.size()
+        #     output = seperate_x.view(b*n, T, C, H, W)
+        #     _, output = self.encoder_model_egoveh(output)
+        #     output = self.pool(output)
+        #     _, C, H, W = output.size()
+        #     output_ego = output.view(b, n, C, H, W)
+        #     output_ped = torch.cat((output_ped, output_ego), dim=1)
+
+        # output = output_ped
+
+        # for graph, importance in zip(self.st_gcn_networks, self.edge_importance):
+        #     output, _ = graph(output, a * importance)
+        #
+        # output = output.permute(0, 2, 3, 4, 1).contiguous()
+        # output = output.view(B, C * H * W, N)
         # output = F.avg_pool1d(output, output.size()[2])
-        output = torch.sum(output, dim=2)
+        # output = torch.sum(output, dim=2)
+        # output = output[:, 0]
 
         # output = output.view(B, N * C * H * W)
         output = self.encoder_output(output)

@@ -4,6 +4,7 @@ import torch.utils.data
 import torchvision.models as models
 from torch.autograd import Variable
 
+import matplotlib.pyplot as plt
 import cv2
 import os
 import math
@@ -32,22 +33,23 @@ class Dataset(torch.utils.data.Dataset):
         self.unique_bbox = self.dataset['unique_bbox']
         self.unique_image = self.dataset['unique_image']
 
-        self.pedestrian_nodes = 5 # default should be one
-        self.vehicle_nodes = 3
-        self.traffic_light_nodes = 3
-        self.sign_nodes = 3
-        self.crosswalk_nodes = 3
-        self.transit_station_nodes = 3
-        self.ego_vehicle = True
+        self.node_info = {'pedestrian': 1,  # default should be one
+                          'vehicle': 0,
+                          'traffic_light': 0,
+                          'sign': 0,
+                          'crosswalk': 0,
+                          'transit_station': 0,
+                          'ego_vehicle': 0}
 
-        if self.ego_vehicle:
-            self.ego_vehicle_node = 1
-        else:
-            self.ego_vehicle_node = 0
+        # if self.node_info['ego_vehicle']:
+        #     self.ego_vehicle_node = 1
+        # else:
+        #     self.ego_vehicle_node = 0
 
-        self.max_nodes = self.pedestrian_nodes + self.vehicle_nodes +\
-                         self.traffic_light_nodes + self.crosswalk_nodes +\
-                         self.transit_station_nodes + self.sign_nodes + self.ego_vehicle_node
+        self.max_nodes = self.node_info['pedestrian'] + self.node_info['vehicle'] +\
+                         self.node_info['traffic_light'] + self.node_info['crosswalk'] +\
+                         self.node_info['transit_station'] + self.node_info['sign'] +\
+                         self.node_info['ego_vehicle']
 
         self.path = 'E:\PIE_dataset\images'  # Folder where the images are saved
 
@@ -76,7 +78,13 @@ class Dataset(torch.utils.data.Dataset):
         self.seq_len = len(self.track['images'][0])
         # False for stop creating pickle file for nodes,graph and adjacency matrix
         self.regen_pkl = regen_pkl
-
+        count_positive_samples = 0
+        count_ped = []
+        count_veh = []
+        count_sign = []
+        count_traflig = []
+        count_transit = []
+        count_cross = []
         if self.regen_pkl:
             i = -1
             for img_sequences, bbox_sequences, ped_ids in zip(self.track['images'],
@@ -90,7 +98,8 @@ class Dataset(torch.utils.data.Dataset):
                 node_features = []
                 img_centre_seq = []
                 bbox_location_seq = []
-
+                if int(self.track['output'][i][0]) == 1:
+                    count_positive_samples += 1
                 for imp, b, p in zip(img_sequences, bbox_sequences, ped_ids):
 
                     update_progress(i / self.num_examples)
@@ -225,97 +234,153 @@ class Dataset(torch.utils.data.Dataset):
                     bbox_location_seq.append(bbox_location.copy())  # BBox location
                     img_centre_seq.append(img_centre.copy())  # Bounding box centre location
 
-                self.visualisation(15, node_features, img_centre_seq)
-                # all_node_features_seq = []
-                # bbox_location_all_node = []
-                # img_centre_all_node = []
-                # for s in range(self.seq_len):
-                #
-                #     all_node_features = []
-                #     bbox_location_seq_all_node = []
-                #     img_centre_seq_all_node = []
-                #     for k in node_features[0]:
-                #         if k == 'pedestrian':
-                #             for num, saving_nodes in enumerate(zip(node_features[s][k],
-                #                                                    bbox_location_seq[s][k],
-                #                                                    img_centre_seq[s][k])):
-                #                 if num < self.pedestrian_nodes:
-                #                     all_node_features.append(saving_nodes[0])
-                #                     bbox_location_seq_all_node.append(saving_nodes[1])
-                #                     img_centre_seq_all_node.append(saving_nodes[2])
-                #
-                #         if k == 'vehicle':
-                #             for num, saving_nodes in enumerate(zip(node_features[s][k],
-                #                                                    bbox_location_seq[s][k],
-                #                                                    img_centre_seq[s][k])):
-                #
-                #                 if num < self.vehicle_nodes:
-                #                     all_node_features.append(saving_nodes[0])
-                #                     bbox_location_seq_all_node.append(saving_nodes[1])
-                #                     img_centre_seq_all_node.append(saving_nodes[2])
-                #
-                #         if k == 'traffic_light':
-                #             for num, saving_nodes in enumerate(zip(node_features[s][k],
-                #                                                    bbox_location_seq[s][k],
-                #                                                    img_centre_seq[s][k])):
-                #
-                #                 if num < self.traffic_light_nodes:
-                #                     all_node_features.append(saving_nodes[0])
-                #                     bbox_location_seq_all_node.append(saving_nodes[1])
-                #
-                #         if k == 'transit_station':
-                #             for num, saving_nodes in enumerate(zip(node_features[s][k],
-                #                                                    bbox_location_seq[s][k],
-                #                                                    img_centre_seq[s][k])):
-                #
-                #                 if num < self.transit_station_nodes:
-                #                     all_node_features.append(saving_nodes[0])
-                #                     bbox_location_seq_all_node.append(saving_nodes[1])
-                #                     img_centre_seq_all_node.append(saving_nodes[2])
-                #
-                #         if k == 'sign':
-                #             for num, saving_nodes in enumerate(zip(node_features[s][k],
-                #                                                    bbox_location_seq[s][k],
-                #                                                    img_centre_seq[s][k])):
-                #
-                #                 if num < self.sign_nodes:
-                #                     all_node_features.append(saving_nodes[0])
-                #                     bbox_location_seq_all_node.append(saving_nodes[1])
-                #                     img_centre_seq_all_node.append(saving_nodes[2])
-                #
-                #         if k == 'crosswalk':
-                #             for num, saving_nodes in enumerate(zip(node_features[s][k],
-                #                                                    bbox_location_seq[s][k],
-                #                                                    img_centre_seq[s][k])):
-                #
-                #                 if num < self.crosswalk_nodes:
-                #                     all_node_features.append(saving_nodes[0])
-                #                     bbox_location_seq_all_node.append(saving_nodes[1])
-                #                     img_centre_seq_all_node.append(saving_nodes[2])
-                #
-                #         if k == 'ego_vehicle':
-                #             for num, saving_nodes in enumerate(zip(node_features[s][k],
-                #                                                    bbox_location_seq[s][k],
-                #                                                    img_centre_seq[s][k])):
-                #
-                #                 if num < self.ego_vehicle_node:
-                #                     all_node_features.append(saving_nodes[0])
-                #                     bbox_location_seq_all_node.append(saving_nodes[1])
-                #                     img_centre_seq_all_node.append(saving_nodes[2])
-                #
-                #     all_node_features_seq.append(all_node_features)
-                #     bbox_location_all_node.append(bbox_location_seq_all_node)
-                #     img_centre_all_node.append(img_centre_seq_all_node)
+                # self.visualisation(15, node_features, img_centre_seq)
+                all_node_features_seq = []
+                bbox_location_all_node = []
+                img_centre_all_node = []
 
+                for s in range(self.seq_len):
 
+                    all_node_features = []
+                    bbox_location_seq_all_node = []
+                    img_centre_seq_all_node = []
+                    for k in node_features[0]:
+                        if k == 'pedestrian':
+                            count_ped.append(len(node_features[s][k]))
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
 
-                # self.feature_save_folder = 'U:/thesis_code/data/nodes_and_features/' + str(self.data_type)
-                # self.feature_save_path = os.path.join(self.feature_save_folder, str(i) + '.pkl')
-                # if not os.path.exists(self.feature_save_folder):
-                #     os.makedirs(self.feature_save_folder)
-                # with open(self.feature_save_path, 'wb') as fid:
-                #     pickle.dump((img_centre_all_node, all_node_features_seq, bbox_location_all_node), fid,
-                #                 pickle.HIGHEST_PROTOCOL)
+                                if num < self.node_info['pedestrian']:
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
+
+                        if k == 'vehicle':
+                            count_veh.append(len(node_features[s][k]))
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
+                                if num < self.node_info['vehicle']:
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
+
+                        if k == 'traffic_light':
+                            count_traflig.append(len(node_features[s][k]))
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
+                                if num < self.node_info['traffic_light']:
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+
+                        if k == 'transit_station':
+                            count_transit.append(len(node_features[s][k]))
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
+                                if num < self.node_info['transit_station']:
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
+
+                        if k == 'sign':
+                            count_sign.append(len(node_features[s][k]))
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
+                                if num < self.node_info['sign']:
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
+
+                        if k == 'crosswalk':
+                            count_cross.append(len(node_features[s][k]))
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
+                                if num < self.node_info['crosswalk']:
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
+
+                        if k == 'ego_vehicle':
+                            for num, saving_nodes in enumerate(zip(node_features[s][k],
+                                                                   bbox_location_seq[s][k],
+                                                                   img_centre_seq[s][k])):
+
+                                if num < self.node_info['ego_vehicle']:
+                                    all_node_features.append(saving_nodes[0])
+                                    bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
+
+                    all_node_features_seq.append(all_node_features)
+                    bbox_location_all_node.append(bbox_location_seq_all_node)
+                    img_centre_all_node.append(img_centre_seq_all_node)
+
+                self.feature_save_folder = 'U:/thesis_code/data/nodes_and_features/' + str(self.data_type)
+                self.feature_save_path = os.path.join(self.feature_save_folder, str(i) + '.pkl')
+                if not os.path.exists(self.feature_save_folder):
+                    os.makedirs(self.feature_save_folder)
+                with open(self.feature_save_path, 'wb') as fid:
+                    pickle.dump((img_centre_all_node, all_node_features_seq, bbox_location_all_node), fid,
+                                pickle.HIGHEST_PROTOCOL)
+
+        # print('\nNumber of Positive samples(Crossing):', count_positive_samples)
+        # print('Number of Negative samples(Non-crossing):', self.num_examples-count_positive_samples )
+        # name = count_cross
+        # self.ped_data = np.zeros(np.max(name)+1)
+        # for i in range(np.max(name)+1):
+        #     for c in name:
+        #         if c >= i:
+        #             self.ped_data[i] = self.ped_data[i]+1
+        #
+        # self.ped_data = self.ped_data/len(name)*100
+        #
+        # print('\nTotal frames:', len(count_ped))
+        # print('\nAvg number of Pedestrian:', np.mean(count_ped))
+        # print('Max number of Pedestrian:', np.max(count_ped))
+        # print('Total frames of Pedestrian above avg:', np.sum(count_ped >= np.mean(count_ped)))
+        # print('Total frames where there are %d Pedestrians:' % np.round(np.mean(count_ped)), np.sum(count_ped == np.round(np.mean(count_ped))))
+        # print('Total number of Pedestrians:', np.sum(count_ped))
+        #
+        # print('\nAvg number of Vehicle:', np.mean(count_veh))
+        # print('Max number of Vehicle:', np.max(count_veh))
+        # print('Total frames of Vehicle above avg:', np.sum(count_veh >= np.mean(count_veh)))
+        # print('Total frames where there are %d Vehicles:' % np.round(np.mean(count_veh)), np.sum(count_veh == np.round(np.mean(count_veh))))
+        # print('Total number of Vehicles:', np.sum(count_veh))
+        #
+        # print('\nAvg number of Traffic Light:', np.mean(count_traflig))
+        # print('Max number of Traffic Light:', np.max(count_traflig))
+        # print('Total frames of Traffic Lights above avg:', np.sum(count_traflig >= np.mean(count_traflig)))
+        # print('Total frames where there are %d Traffic Light:' % np.round(np.mean(count_traflig)), np.sum(count_traflig == np.round(np.mean(count_traflig))))
+        # print('Total number of Traffic Lights:', np.sum(count_traflig))
+        #
+        # print('\nAvg number of Transit Station:', np.mean(count_transit))
+        # print('Max number of Transit Station:', np.max(count_transit))
+        # print('Total frames of Transit Station above avg:', np.sum(count_transit >= np.mean(count_transit)))
+        # print('Total frames where there are %d Transit Station:' % np.round(np.mean(count_transit)), np.sum(count_transit == np.round(np.mean(count_transit))))
+        # print('Total number of Transit Station:', np.sum(count_transit))
+        #
+        # print('\nAvg number of Sign:', np.mean(count_sign))
+        # print('Max number of Sign:', np.max(count_sign))
+        # print('Total frames of Sign above avg:', np.sum(count_sign >= np.mean(count_sign)))
+        # print('Total frames where there is %d Sign:' % np.round(np.mean(count_sign)), np.sum(count_sign == np.round(np.mean(count_sign))))
+        # print('Total number of Sign:', np.sum(count_sign))
+        #
+        # print('\nAvg number of Crosswalk:', np.mean(count_cross))
+        # print('Max number of Crosswalk:', np.max(count_cross))
+        # print('Total frames of Crosswalk above avg:', np.sum(count_cross >= np.mean(count_cross)))
+        # print('Total frames where there are %d Crosswalk:' % np.round(np.mean(count_cross)), np.sum(count_cross == np.round(np.mean(count_cross))))
+        # print('Total number of Crosswalk:', np.sum(count_cross))
+        #
+
 
     def __getitem__(self, index):
 
@@ -501,17 +566,17 @@ class Dataset(torch.utils.data.Dataset):
                 img_features = np.squeeze(img_features)
                 graph[s, h, :] = img_features
                 # decoder_input[s, h, :] = bbox_location[h]
-                adj_matrix[0, 0] = 1
+                adj_matrix[h, h] = 2
                 # adj_matrix_spatial[s, h, h] = 1
 
                 if h > 0:
                     # adj_matrix[s, h, h] = 2
-                    img_cp_s = img_centre_seq[s][h]
-                    l2_norm = self.anorm(img_cp_p, img_cp_s)
-                    adj_matrix[h, 0] = l2_norm
-                    adj_matrix[0, h] = l2_norm
-                    # adj_matrix[h, 0] = 1  # l2_norm
-                    # adj_matrix[0, h] = 1  # l2_norm
+                    # img_cp_s = img_centre_seq[s][h]
+                    # l2_norm = self.anorm(img_cp_p, img_cp_s)
+                    # adj_matrix[h, 0] = l2_norm
+                    # adj_matrix[0, h] = l2_norm
+                    adj_matrix[h, 0] = 1  # l2_norm
+                    adj_matrix[0, h] = 1  # l2_norm
                     # adj_matrix_spatial[s, h, 0] = 1
                     # adj_matrix_spatial[s, 0, h] = 1
 

@@ -281,7 +281,8 @@ class social_stgcnn(nn.Module):
         output = output.permute(0, 2, 3, 4, 1).contiguous()
         output = output.view(b, c * h * w, n)
         # output = F.avg_pool1d(output, output.size()[2])
-        output = torch.sum(output, dim=2)
+        # output = torch.sum(output, dim=2)
+        output = output[:, 0]
 
         output = self.flatten(output)
 

@@ -153,99 +153,77 @@ class st_gcn(nn.Module):
         return x, A
 
 class social_stgcnn(nn.Module):
-    def __init__(self, n_stgcnn=1, n_txpcnn=1, input_feat=512, output_feat=128,
-                 seq_len=15, pred_seq_len=1, kernel_size=3):
+    def __init__(self,
+                    max_nodes, node_info):
         super(social_stgcnn, self).__init__()
-        self.n_stgcnn = n_stgcnn
-        self.n_txpcnn = n_txpcnn
-        self.max_nodes = 1
-        self.seq_len = seq_len
+        seq_len = 15
+        kernel_size = 3
         self.edge_importance_weighting = True
 
-        # self.convolution = nn.Conv2d(512, 18, kernel_size=1, stride=1)
-        # self.batch = nn.BatchNorm2d(18)
-        # self.dropout = nn.Dropout(p=0.5)
-
-        # self.data_bn = nn.BatchNorm1d(input_feat*self.max_nodes)
-        # self.data_bn_loc = nn.BatchNorm1d(4*self.max_nodes)
-        #
         self.st_gcn_networks = nn.ModuleList((
             st_gcn(512*7*7, 64, (kernel_size, seq_len), 1, residual=False, dropout=0.5),
             st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
-            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
-            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
-            st_gcn(64, 128, (kernel_size, seq_len), 2, dropout=0.5),
-            st_gcn(128, 128, (kernel_size, seq_len), 1, dropout=0.5),
-            # st_gcn(128, 128, (kernel_size, seq_len), 1, dropout=0.5),
-            # st_gcn(128, 256, (kernel_size, seq_len), 2, dropout=0.5),
-            # st_gcn(256, 256, (kernel_size, seq_len), 1, dropout=0.5),
-            # st_gcn(256, 256, (kernel_size, seq_len), 1, dropout=0.5),
+
         ))
         self.st_gcn_networks_loc = nn.ModuleList((
             st_gcn(4, 64, (kernel_size, seq_len), 1, residual=False, dropout=0.5),
             st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
-            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
-            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
-            st_gcn(64, 128, (kernel_size, seq_len), 2, dropout=0.5),
-            st_gcn(128, 128, (kernel_size, seq_len), 1, dropout=0.5),
-            # st_gcn(128, 128, (kernel_size, seq_len), 1, dropout=0.5),
-            # st_gcn(128, 256, (kernel_size, seq_len), 2, dropout=0.5),
-            # st_gcn(256, 256, (kernel_size, seq_len), 1, dropout=0.5),
-            # st_gcn(256, 256, (kernel_size, seq_len), 1, dropout=0.5),
-        ))
-        # self.seed = 12
-        # torch.manual_seed(self.seed)
-        # torch.cuda.manual_seed(self.seed)
-        # # initialize parameters for edge importance weighting
-        # if self.edge_importance_weighting:
-        #     self.edge_importance = nn.ParameterList([
-        #         nn.Parameter(torch.ones(seq_len, self.max_nodes, self.max_nodes, requires_grad=True))
-        #         for i in self.st_gcn_networks
-        #     ])
-        #
-        # else:
-        #     self.edge_importance = [1] * len(self.st_gcn_networks)
 
-        # self.pool = nn.MaxPool2d(kernel_size=2)
-        # self.flatten = nn.Flatten()
-        self.bn = nn.BatchNorm1d(256)
-        self.dec = nn.LSTM(256, output_feat, num_layers=1, bias=True,
+        ))
+        self.seed = 12
+        self.max_nodes = max_nodes
+        torch.manual_seed(self.seed)
+        torch.cuda.manual_seed(self.seed)
+        # initialize parameters for edge importance weighting
+        if self.edge_importance_weighting:
+            self.edge_importance = nn.ParameterList([
+                nn.Parameter(torch.ones(seq_len, self.max_nodes, self.max_nodes, requires_grad=True))
+                for i in self.st_gcn_networks
+            ])
+            self.edge_importance_loc = nn.ParameterList([
+                nn.Parameter(torch.ones(seq_len, self.max_nodes, self.max_nodes, requires_grad=True))
+                for i in self.st_gcn_networks_loc
+            ])
+
+        else:
+            self.edge_importance = [1] * len(self.st_gcn_networks)
+            self.edge_importance = [1] * len(self.st_gcn_networks_loc)
+
+        # self.bn = nn.BatchNorm1d(128)
+
+        self.dec = nn.LSTM(128, 128, num_layers=1, bias=True,
                            batch_first=True, bidirectional=False)
 
         nn.init.xavier_normal_(self.dec.weight_hh_l0)
         self.dropout_dec = nn.Dropout(p=0.4)
 
-        self.fcn = nn.Linear(output_feat, pred_seq_len)
+        self.fcn = nn.Linear(128, 1)
         nn.init.xavier_normal_(self.fcn.weight)
 
-    def forward(self, v, a, loc):
+    def forward(self, v, a, a_loc, loc):
 
         b, t, n, c, h, w = v.size()
         v = v.permute(0, 3, 4, 5, 1, 2).contiguous()
         v = v.view(b, c*h*w, t, n)
         loc = loc.permute(0, 3, 1, 2).contiguous()
 
-        for graph in self.st_gcn_networks:
-            v, _ = graph(v, a)
+        for graph, imp in zip(self.st_gcn_networks, self.edge_importance):
+            v, _ = graph(v, a*imp)
 
+        for graph, imp_loc in zip(self.st_gcn_networks_loc, self.edge_importance):
+            loc, _ = graph(loc, a_loc*imp_loc)
+
+        v = v[:, :, :, 0]
+
+        loc = loc[:, :, :, 0]
+
+        # print(v.shape)
         # print(loc.shape)
-        for graph in self.st_gcn_networks_loc:
-            loc, _ = graph(loc, a)
-
-        v = v.permute(0, 2, 1, 3).contiguous()
-        v = v.view(b*t, -1, n)
-        v = F.avg_pool1d(v, v.size()[2])
-        v = v.reshape(b, t, -1)
-
-        loc = loc.permute(0, 2, 1, 3).contiguous()
-        loc = loc.view(b*t, -1, n)
-        loc = F.avg_pool1d(loc, loc.size()[2])
-        loc = loc.reshape(b, t, -1)
-
-        x = torch.cat((v, loc), dim=2)
-
-        x = self.bn(x.permute(0, 2, 1).contiguous())
+        x = torch.cat((v, loc), dim=1)
         x = x.permute(0, 2, 1).contiguous()
+
+        # x = self.bn(x.permute(0, 2, 1).contiguous())
+        # x = x.permute(0, 2, 1).contiguous()
 
         x, _ = self.dec(x)
         x = torch.tanh(self.dropout_dec(x))

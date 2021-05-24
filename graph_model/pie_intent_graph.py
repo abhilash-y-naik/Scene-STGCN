@@ -23,17 +23,19 @@ from sklearn.metrics import precision_score
 from  sklearn.metrics import recall_score
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import average_precision_score
 
 from graph_model.utils import *
 
 
 # from graph_model.model import *
-# from graph_model.model import *
-# from graph_model.dataset_model_conv import Dataset
+from graph_model.model import *
+from graph_model.dataset_model_conv import Dataset
 
 
-from graph_model.dataset import Dataset, Dataset_test
-from graph_model.model_conv_spatial import *
+# from graph_model.dataset import Dataset, Dataset_test
+# from graph_model.model_conv_spatial import *
 
 from matplotlib import pyplot
 
@@ -72,14 +74,15 @@ class PIEIntent(object):
         self.obs_seq_len = seq_len
         self.kernel_size = kernel_size
         self.pred_seq_len = pred_seq_len
-        self.seed = 12
+        self.seed = 101314772952300
+        # self.seed = 12
         torch.manual_seed(self.seed)
         torch.cuda.manual_seed(self.seed)
         # torch.cuda.manual_seed_all(self.seed)  # if you are using multi-GPU.
         # np.random.seed(self.seed)  # Numpy module.
         # random.seed(self.seed)  # Python random module.
         # torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = True
+        # torch.backends.cudnn.deterministic = True
 
     def get_model_config(self):
         """
@@ -187,9 +190,11 @@ class PIEIntent(object):
 
         pid = []
         for p in ped_ids:
+
             pid.extend([p[i:i + seq_length] for i in \
                         range(0, len(p) \
                               - seq_length + 1, overlap_stride)])
+
         ped_ids = pid
 
         frame = []
@@ -274,10 +279,11 @@ class PIEIntent(object):
     def train(self,
               data_train,
               data_val,
+              data_test,
               batch_size=128,
               epochs=400,
               optimizer_type='rmsprop',
-              optimizer_params={'lr': 0.0001, 'clipvalue': 0.0, 'decay': 0},
+              optimizer_params={'lr': 0.00001, 'clipvalue': 0.0, 'decay': 0},
               loss=['binary_crossentropy'],
               metrics=['acc'],
               data_opts=''):
@@ -305,6 +311,7 @@ class PIEIntent(object):
                         'metrics': metrics,
                         'learning_scheduler_mode': 'plateau',
                         'lambda_l2': 0.05,
+                        'torch.seed': torch.initial_seed(),
                         'learning_scheduler_params': {'exp_decay_param': 0.3,
                                                       'step_drop_rate': 0.5,
                                                       'epochs_drop_rate': 20.0,
@@ -321,24 +328,74 @@ class PIEIntent(object):
         seq_length = data_opts['max_size_observe']
         train_d = self.get_train_val_data(data_train, data_type, seq_length, 0.5)
         val_d = self.get_train_val_data(data_val, data_type, seq_length, 0)
+        # test_d = self.get_train_val_data(data_test, data_type, seq_length, 0)
 
         self._encoder_seq_length = train_d['decoder_input'].shape[1]
         self._decoder_seq_length = train_d['decoder_input'].shape[1]
 
         self._sequence_length = self._encoder_seq_length
-        # train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=True)
-        # print(train_dataset.max_nodes)
+
+        train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=True)
         val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=True)
-        exit()
-        # def _init_fn(worker_id):
-        #     np.random.seed(12)
-        # , worker_init_fn = _init_fn
+        # test_dataset = Dataset(data_test, test_d, data_opts, 'test', regen_pkl=True)
+        # print(train_dataset.ped_data)
+        # print(val_dataset.ped_data)
+        # print(test_dataset.ped_data)
+        # if (len(train_dataset.ped_data) >= len(val_dataset.ped_data)) and \
+        #         (len(train_dataset.ped_data) >= len(test_dataset.ped_data)):
+        #     max = len(train_dataset.ped_data)
+        #     train_ped = train_dataset.ped_data
+        #     val_ped = np.zeros(max)
+        #     test_ped = np.zeros(max)
+        #     for i in range(len(val_dataset.ped_data)):
+        #         val_ped[i] = val_dataset.ped_data[i]
+        #     for i in range(len(test_dataset.ped_data)):
+        #         test_ped[i] = test_dataset.ped_data[i]
+        #
+        # elif (len(val_dataset.ped_data) >= len(train_dataset.ped_data)) and \
+        #         (len(val_dataset.ped_data) >= len(test_dataset.ped_data)):
+        #     max = len(val_dataset.ped_data)
+        #     val_ped = val_dataset.ped_data
+        #     train_ped = np.zeros(max)
+        #     test_ped = np.zeros(max)
+        #     for i in range(len(test_dataset.ped_data)):
+        #         test_ped[i] = test_dataset.ped_data[i]
+        #     for i in range(len(train_dataset.ped_data)):
+        #         train_ped[i] = train_dataset.ped_data[i]
+        #
+        # else:
+        #     max = len(test_dataset.ped_data)
+        #     test_ped = test_dataset.ped_data
+        #     val_ped = np.zeros(max)
+        #     train_ped = np.zeros(max)
+        #     for i in range(len(val_dataset.ped_data)):
+        #         val_ped[i] = val_dataset.ped_data[i]
+        #     for i in range(len(train_dataset.ped_data)):
+        #         train_ped[i] = train_dataset.ped_data[i]
+
+        # plt.figure(1)
+        # # plt.add_axes([0, 0, 1, 1])
+        # plt.bar(np.arange(max)-0.2, train_ped, color="r", width=0.2)
+        # plt.bar(np.arange(max), val_ped, color="g", width=0.2)
+        # plt.bar(np.arange(max)+0.2, test_ped, color="b", width=0.2)
+        # plt.ylabel("Total percentage of occurance(%)")
+        # plt.ylim(0, 100)
+        # plt.xlim(+0.50, 5.50)
+        # plt.yticks(np.arange(0, 100, 10))
+        # plt.xlabel("Number of crosswalk")
+        # plt.title("Data distribution of crosswalk")
+        # plt.legend(['train', 'val', 'test'])
+        # plt.grid(axis='y')
+        # plt.savefig("U:/thesis_code/data_crosswalk1.png")
+        # plt.close(1)
+
+
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                                   batch_size=56, shuffle=True, num_workers=4,
+                                                   batch_size=128, shuffle=True, num_workers=4,
                                                    pin_memory=False)
 
         val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                                batch_size=56, shuffle=False, num_workers=4,
+                                                batch_size=128, shuffle=False, num_workers=4,
                                                 pin_memory=False)
 
         # automatically generate model name as a time string
@@ -371,10 +428,13 @@ class PIEIntent(object):
             fid.write("\n####### Data options #######\n")
             fid.write(str(data_opts))
 
-        train_model = social_stgcnn(max_nodes=train_dataset.max_nodes).cuda()
+        train_model = social_stgcnn(max_nodes=train_dataset.max_nodes,
+                                    node_info=train_dataset.node_info).cuda()
 
         # print(torch.seed())
-        # pretrained_dict = torch.load('./graph_model/pretrained weight/pie_weight100.pth')
+        # pretrained_dict = torch.load('./graph_model/pretrained_weight/pie_weight100.pth')
+
+
         # ##############################################################################################
         # # If there are any changes made in the architecture and the you would want to use old trained
         # # weights then the code below  is useful
@@ -385,8 +445,10 @@ class PIEIntent(object):
         # train_model.load_state_dict(model_dict)  # 3. load the new state dict
         #
         #################################################################################################
-        # train_model.load_state_dict(pretrained_dict) # comment this line if you are using above code
-
+        # train_model.load_state_dict(pretrained_dict)# comment this line if you are using above code
+        # (train_model.seed())
+        #
+        # exit()
         # print(train_model.eval())
 
         # for name, param in train_model.named_parameters():
@@ -451,20 +513,20 @@ class PIEIntent(object):
             batch_losses = []
             y_true = []
             y_pred = []
-            for step, (graph, adj_matrix, location, label) in enumerate(train_loader):
+            for step, (graph, adj_matrix, adj_matrix_loc, location, label) in enumerate(train_loader):
                 if count % 10 == 0:
                     print(count)
                 count = count + 1
 
                 G = Variable(graph.type(torch.FloatTensor)).cuda()
                 A = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                # A_s = Variable(adj_matrix_s.type(torch.FloatTensor)).cuda()
+                A_loc = Variable(adj_matrix_loc.type(torch.FloatTensor)).cuda()
                 Loc = Variable(location.type(torch.FloatTensor)).cuda()
                 label = Variable(label.type(torch.float)).cuda()
                 # print(label.shape)
                 # outputs, _ = train_model(G, A.squeeze(0))
                 # print(A)
-                outputs = train_model(G, A, Loc)
+                outputs = train_model(G, A, A_loc, Loc)
 
                 # if count % batch_size != 0 and step != turn_point_train:
                 #     l = loss_fn(outputs, label)
@@ -479,16 +541,16 @@ class PIEIntent(object):
                 #     is_fst_loss_train = True
                 #     loss.backward()
 
-                # l2_enc = torch.cat([x.view(-1) for x in train_model.st_gcn_networks.parameters()])
-                # l2_enc_loc = torch.cat([x.view(-1) for x in train_model.gcn_network.parameters()])
-                # l2_dec = torch.cat([x.view(-1) for x in train_model.dec.parameters()])
+                l2_enc = torch.cat([x.view(-1) for x in train_model.st_gcn_networks.parameters()])
+                l2_enc_loc = torch.cat([x.view(-1) for x in train_model.st_gcn_networks_loc.parameters()])
+                l2_dec = torch.cat([x.view(-1) for x in train_model.dec.parameters()])
 
                 loss = loss_fn(outputs, label)
 
                 # torch.cuda.list_gpu_processes(device=0)
-                # loss += 0.05 * torch.norm(l2_enc, p=2) + \
-                #         0.05* torch.norm(l2_enc_loc, p=2) + \
-                #         0.05 * torch.norm(l2_dec, p=2)
+                loss += 0.01 * torch.norm(l2_dec, p=2) + \
+                        0.01 * torch.norm(l2_enc, p=2) + \
+                        0.01 * torch.norm(l2_enc_loc, p=2)
                 batch_losses.append(loss.detach().item())
 
                 optimizer.zero_grad()  # (reset gradients)
@@ -559,7 +621,7 @@ class PIEIntent(object):
             y_pred = []
             val_loss = 0
             count = 0
-            for step, (graph, adj_matrix, location, label) in enumerate(val_loader):
+            for step, (graph, adj_matrix, adj_matrix_loc, location, label) in enumerate(val_loader):
                 with torch.no_grad():
                     if count % 10 == 0:
                         print(count)
@@ -567,13 +629,13 @@ class PIEIntent(object):
 
                     G = Variable(graph.type(torch.FloatTensor)).cuda()
                     A = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                    # A_s = Variable(adj_matrix_s.type(torch.FloatTensor)).cuda()
+                    A_loc = Variable(adj_matrix_loc.type(torch.FloatTensor)).cuda()
                     Loc = Variable(location.type(torch.FloatTensor)).cuda()
                     label = Variable(label.type(torch.float)).cuda()
                     # print(label.shape)
                     # outputs, _ = train_model(G, A.squeeze(0))
                     # print(A)
-                    outputs = train_model(G, A, Loc)
+                    outputs = train_model(G, A, A_loc, Loc)
                     # print(outputs.shape)
 
                     # if count % batch_size != 0 and step != turn_point_val:
@@ -589,16 +651,16 @@ class PIEIntent(object):
                     #     is_fst_loss_val = True
 
                         # val_loss +=loss
-                    # l2_enc = torch.cat([x.view(-1) for x in train_model.st_gcn_networks.parameters()])
-                    # l2_enc_loc = torch.cat([x.view(-1) for x in train_model.gcn_network.parameters()])
-                    # l2_dec = torch.cat([x.view(-1) for x in train_model.dec.parameters()])
+                    l2_enc = torch.cat([x.view(-1) for x in train_model.st_gcn_networks.parameters()])
+                    l2_enc_loc = torch.cat([x.view(-1) for x in train_model.st_gcn_networks_loc.parameters()])
+                    l2_dec = torch.cat([x.view(-1) for x in train_model.dec.parameters()])
 
                     loss = loss_fn(outputs, label)
 
                     # torch.cuda.list_gpu_processes(device=0)
-                    # loss += 0.05 * torch.norm(l2_enc, p=2) + \
-                    #         0.05 * torch.norm(l2_enc_loc, p=2) + \
-                    #         0.05 * torch.norm(l2_dec, p=2)
+                    loss += 0.01 * torch.norm(l2_dec, p=2) + \
+                            0.01 * torch.norm(l2_enc, p=2) + \
+                            0.01 * torch.norm(l2_enc_loc, p=2)
 
                     batch_losses.append(loss.data.cpu().numpy())
                     # val_loss += loss
@@ -802,7 +864,7 @@ class PIEIntent(object):
         # counting_negatives = 0
         y_true = []
         y_pred = []
-        new_pred = []
+        y_s_pred = []
         with open(model_path + '/misclassification.txt', 'wt') as fid:
             fid.write("####### Misclssification #######\n")
 
@@ -844,16 +906,39 @@ class PIEIntent(object):
                     y_true.append(np.asarray(label.data.to('cpu')))
                     # y_pred.append(np.where(torch.sigmoid(outputs).data.to('cpu') > 0.5, 1, 0))
                     y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
-                    # new_pred.append(torch.sigmoid(outputs).data.to('cpu'))
+                    y_s_pred.append(torch.sigmoid(outputs).data.to('cpu'))
+
 
 
         # print('intention of crossing:', counting_negatives)
         y_true = np.concatenate(y_true, axis=0)
         y_pred = np.concatenate(y_pred, axis=0)
+        y_s_pred = np.concatenate(y_s_pred, axis=0)
         print(some_count)
-        # print(y_pred)
-        # print(y_true)
-        # new_pred = np.concatenate(new_pred, axis=0)
+
+        count_totalp = 0
+        score_p = 0
+        count_p = 0
+        count_totaln = 0
+        score_n = 0
+        count_n = 0
+        for test_gt, test_pt in zip(y_true, y_s_pred):
+            if int(test_gt) == 1:
+                count_totalp += 1
+                score_p += test_pt
+                if np.round(test_pt) == 1:
+                    count_p += 1
+            else:
+                count_totaln += 1
+                score_n += test_pt
+                if np.round(test_pt) == 0:
+                    count_n += 1
+
+        delta = (count_p / count_totalp) - (count_n / count_totaln)
+        delta_s = (score_p / count_totalp) - (score_n / count_totaln)
+        auc = roc_auc_score(y_true, y_s_pred)
+        avg_p = average_precision_score(y_true, y_s_pred)
+
         TN = confusion_matrix(y_true, y_pred)[0, 0]
         FP = confusion_matrix(y_true, y_pred)[0, 1]
         FN = confusion_matrix(y_true, y_pred)[1, 0]
@@ -862,6 +947,10 @@ class PIEIntent(object):
         print('CONFUSION MATRIX:')
         print("TP: %g" % TP, "FP: %g" % FP)
         print("FN: %g" % FN, "TN: %g" % TN)
+        print('ROC AUC:', auc)
+        print('Average Precision:', avg_p)
+        print('Delta predictions:', delta)
+        print('Delta score:', delta_s)
 
         # # yhat = y_pred[:, 1]
         # # calculate roc curves

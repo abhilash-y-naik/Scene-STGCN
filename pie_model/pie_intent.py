@@ -37,7 +37,10 @@ from sklearn.metrics import f1_score
 from sklearn.metrics import precision_score
 from  sklearn.metrics import recall_score
 from sklearn.metrics import confusion_matrix
+from sklearn.metrics import average_precision_score
 from sklearn.metrics import roc_curve
+from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import roc_auc_score
 
 from pie_model.utils import *
 from pie_model.dataset import DatasetTrain, DatasetVal
@@ -746,7 +749,7 @@ class PIEIntent(object):
 
         test_model = self.get_model(train_params['model'])
         test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_100.pth')))
-        print('epoch:50')
+        print('epoch:100')
 
         overlap = 0  # train_params ['overlap']
 
@@ -770,10 +773,12 @@ class PIEIntent(object):
 
         #####################################################################################
 
+
         test_model.eval()  # (set in evaluation mode, this affects BatchNorm and dropout)
         count = 0
         y_true = []
         y_pred = []
+        y_s_pred = []
         new_pred = []
         for step, (input_enc, input_dec, label) in enumerate(test_loader):
             with torch.no_grad():
@@ -787,38 +792,101 @@ class PIEIntent(object):
 
                     outputs = test_model(input_enc, input_dec)
 
-                    y_true.append(np.asarray(label.data.to('cpu')))
-                    y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
+                    gt = np.asarray(label.data.to('cpu'))
+                    # gt = np.where(gt == 1, 0, 1)
+                    # for indi, val_gt in enumerate(gt):
+                    #     if val_gt == 1:
+                    #         gt[indi] = 0
+                    #     else:
+                    #         gt[indi] = 1
+
+                    pt = torch.sigmoid(outputs).data.to('cpu')
+                    # pt = np.where(np.round(pt) == 1, 0, 1)
+                    # for indi, val_gt in enumerate(pt):
+                    #     if val_gt == 1:
+                    #         pt[indi] = 0
+                    #     else:
+                    #         pt[indi] = 1
+
+                    y_true.append(gt)
+                    y_pred.append(np.where((pt) > 0.5, 1, 0))
+                    y_s_pred.append(pt)
                     # new_pred.append(torch.sigmoid(outputs).data.to('cpu'))
 
         y_true = np.concatenate(y_true, axis=0)
         y_pred = np.concatenate(y_pred, axis=0)
-        # new_pred = np.concatenate(new_pred, axis=0)
+        y_s_pred = np.concatenate(y_s_pred, axis=0)
+        # print(some_count)
+
+        count_totalp = 0
+        score_p = 0
+        count_p = 0
+        count_totaln = 0
+        score_n = 0
+        count_n = 0
+        for test_gt, test_pt in zip(y_true, y_s_pred):
+            if int(test_gt) == 1:
+                count_totalp += 1
+                score_p += test_pt
+                if np.round(test_pt) == 1:
+                    count_p += 1
+            else:
+                count_totaln += 1
+                score_n += test_pt
+                if np.round(test_pt) == 0:
+                    count_n += 1
+
+        delta = (count_p / count_totalp) - (count_n / count_totaln)
+        delta_s = (score_p / count_totalp) - (score_n / count_totaln)
+        auc = roc_auc_score(y_true, y_s_pred)
+        avg_p = average_precision_score(y_true, y_s_pred)
+
         TN = confusion_matrix(y_true, y_pred)[0, 0]
         FP = confusion_matrix(y_true, y_pred)[0, 1]
         FN = confusion_matrix(y_true, y_pred)[1, 0]
         TP = confusion_matrix(y_true, y_pred)[1, 1]
+
         print('CONFUSION MATRIX:')
         print("TP: %g" % TP, "FP: %g" % FP)
         print("FN: %g" % FN, "TN: %g" % TN)
+        print('ROC AUC:', auc)
+        print('Average Precision:', avg_p)
+        print('Delta predictions:', delta)
+        print('Delta score:', delta_s)
 
-        # fpr, tpr, thresholds = roc_curve(y_true, new_pred)
+        fpr, tpr, thresholds = roc_curve(y_true, y_s_pred)
+        gmeans = tpr-fpr
+        ix = np.argmax(gmeans)
 
-        # gmeans = np.sqrt(tpr * (1 - fpr))
-        # locate the index of the largest g-mean
-        # ix = np.argmax(gmeans)
-        #
-        # print('Best Threshold=%f, G-Mean=%.3f' % (thresholds[ix], gmeans[ix]))
-        # # plot the roc curve for the model
-        # pyplot.plot([0, 1], [0, 1], linestyle='--', label='No Skill')
-        # pyplot.plot(fpr, tpr, marker='.', label='Logistic')
-        # pyplot.scatter(fpr[ix], tpr[ix], marker='o', color='black', label='Best')
-        # # axis labels
-        # pyplot.xlabel('False Positive Rate')
-        # pyplot.ylabel('True Positive Rate')
-        # pyplot.legend()
-        # # show the plot
-        # pyplot.show()
+        print('Best Threshold=%f, G-Mean=%.3f' % (thresholds[ix], gmeans[ix]))
+        # plot the roc curve for the model
+        plt.figure(1)
+        plt.plot([0, 1], [0, 1], linestyle='--', label='No Skill')
+        plt.plot(fpr, tpr, marker='.', label='Logistic')
+        plt.scatter(fpr[ix], tpr[ix], marker='o', color='black', label='Best')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.legend()
+        plt.grid()
+        plt.title('ROC curve')
+        plt.show()
+
+        P, R, thresholds = precision_recall_curve(y_true, y_s_pred)
+        fscore = (2 * P * R) / (P + R)
+        ix = np.argmax(fscore)
+        print('Best Threshold=%f, F-Score=%.3f' % (thresholds[ix], fscore[ix]))
+        # plot the roc curve for the model
+        no_skill = len(y_true[y_true == 1]) / len(y_true)
+        plt.figure(2)
+        plt.plot([0, 1], [no_skill, no_skill], linestyle='--', label='No Skill')
+        plt.plot(R, P, marker='.', label='Logistic')
+        plt.scatter(R[ix], P[ix], marker='o', color='black', label='Best')
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('Precision-Recall curve')
+        plt.legend()
+        plt.grid()
+        plt.show()
 
         f1 = f1_score(y_true, y_pred)
         precision = precision_score(y_true, y_pred)

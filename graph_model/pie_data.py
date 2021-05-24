@@ -1140,13 +1140,16 @@ class PIE(object):
                 # print(traffic_annots['1_1_1c'])
                 # print(traffic_annots['1_1_2tl'])
                 # exit()
-                if vid != 'video_0003':
-                    continue
+                # if vid != 'video_0003':
+                #     continue
                 ext_frames, ext_ped, ext_img, ext_bbox, ext_intent = [], [], [], [], []
                 traffic_ids = []
                 for pid in sorted(pid_annots):
                     if params['data_split_type'] != 'default' and pid not in _pids:
                         continue
+
+                    # if int(pid_annots[pid]['attributes']['crossing']) == -1:
+                    #     continue
                     num_pedestrians += 1
                     exp_start_frame = pid_annots[pid]['attributes']['exp_start_point']
                     critical_frame = pid_annots[pid]['attributes']['critical_point']
@@ -1164,8 +1167,6 @@ class PIE(object):
                         images, boxes, frame_ids, occlusions = self._height_check(height_rng,
                                                                                   frame_ids, boxes,
                                                                                   images, occlusions)
-
-
 
                     ped_ids = [[pid]] * len(boxes)
 
@@ -1185,9 +1186,13 @@ class PIE(object):
                     int_prob = [[pid_annots[pid]['attributes']['intention_prob']]] * len(boxes)
                     int_bin = [[int(pid_annots[pid]['attributes']['intention_prob'] > 0.5)]] * len(boxes)
 
-                    if pid == '3_3_317':
-                        print(pid_annots[pid]['attributes']['intention_prob'])
-                        print(int_bin)
+                    #     int_bin = [[int(pid_annots[pid]['attributes']['intention_prob'] > 0.5)]] * len(boxes)
+                    # else:
+                    # int_bin = [[int(pid_annots[pid]['attributes']['crossing'])]] * len(boxes)
+
+                    # if pid == '3_3_317':
+                    #     print(pid_annots[pid]['attributes']['intention_prob'])
+                    #     print(int_bin)
                     image_seq.append(images[::seq_stride])
                     box_seq.append(boxes[::seq_stride])
                     occ_seq.append(occlusions[::seq_stride])

@@ -105,12 +105,14 @@ def train_intent(train_test, model, data_path):
                         beh_seq_train = pickle.load(fid, encoding='bytes')
             else:
                 beh_seq_train = imdb.generate_data_trajectory_sequence('train', **data_opts)
-                beh_seq_train = imdb.balance_samples_count(beh_seq_train, label_type='intention_binary')
+                #
                 with open(data_save_path, 'wb') as fid:
                     pickle.dump(beh_seq_train, fid, pickle.HIGHEST_PROTOCOL)
 
-            data_save_path = os.path.join('./PIE_dataset' + '/data_cache/graph/' + 'beh_seq_test' + '.pkl')
+            beh_seq_train = imdb.balance_samples_count(beh_seq_train, label_type='intention_binary')
 
+            regen_pkl = False
+            data_save_path = os.path.join('./PIE_dataset' + '/data_cache/graph/' + 'beh_seq_test' + '.pkl')
             if os.path.exists(data_save_path) and not regen_pkl:
                 with open(data_save_path, 'rb') as fid:
                     try:
@@ -123,9 +125,23 @@ def train_intent(train_test, model, data_path):
                 with open(data_save_path, 'wb') as fid:
                     pickle.dump(beh_seq_val, fid, pickle.HIGHEST_PROTOCOL)
 
+            # data_save_path = os.path.join('./PIE_dataset' + '/data_cache/graph/' + 'beh_seq_test' + '.pkl')
+            # if os.path.exists(data_save_path) and not regen_pkl:
+            #     with open(data_save_path, 'rb') as fid:
+            #         try:
+            #             beh_seq_test = pickle.load(fid)
+            #         except:
+            #             beh_seq_test = pickle.load(fid, encoding='bytes')
+            # else:
+            #     beh_seq_test = imdb.generate_data_trajectory_sequence('test', **data_opts)
+            #     # beh_seq_val = imdb.balance_samples_count(beh_seq_val, label_type='intention_binary')
+            #     with open(data_save_path, 'wb') as fid:
+            #         pickle.dump(beh_seq_val, fid, pickle.HIGHEST_PROTOCOL)
+
             saved_files_path = t.train(data_train=beh_seq_train,
                                        data_val=beh_seq_val,
-                                       epochs=25,
+                                       data_test='',
+                                       epochs=100,
                                        batch_size=128,
                                        data_opts=data_opts)
 
@@ -172,7 +188,9 @@ def train_intent(train_test, model, data_path):
             print(t)
 
 
-def main(train_test=2, model=1, data_path='./PIE_dataset'):
+
+
+def main(train_test=0, model=1, data_path='./PIE_dataset'):
 
     train_intent(train_test=train_test, model=model, data_path=data_path)
 
@@ -183,8 +201,9 @@ if __name__ == '__main__':
         train_test = int(0)  # train_test: 0 - train only, 1 - train and test, 2 - test only
         model = int(1)  # model:0 - PIE, model:1 - Graph
         data_path = './PIE_dataset'  # Path of the split images
-
+        # for i in range(10):
         main(train_test=train_test, model=model, data_path=data_path)
+           # print('Next Iteration')
 
     except ValueError:
         raise ValueError('Usage: python train_test.py <train_test>\n'
