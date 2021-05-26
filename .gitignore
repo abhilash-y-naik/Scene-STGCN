@@ -2,7 +2,6 @@
 visualisation
 data_visualisation
 error
-poses
 pretrained_models/*
 data/data/graph/*
 data/data/graph.zip/*
