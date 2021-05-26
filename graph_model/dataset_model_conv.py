@@ -64,7 +64,7 @@ class Dataset(torch.utils.data.Dataset):
                                   data_subset=self.data_type, ind=1)
         pose_set = {}
         for i in range(6):
-            with open(os.path.join('U:/thesis_code/poses/pose_set0' + str(i+1) + '.pkl'), 'rb') as fid:
+            with open(os.path.join('./poses/pose_set0' + str(i+1) + '.pkl'), 'rb') as fid:
                 try:
                     pose_set['set0'+ str(str(i+1))] = pickle.load(fid)
                 except:
@@ -343,7 +343,7 @@ class Dataset(torch.utils.data.Dataset):
                     bbox_location_all_node.append(bbox_location_seq_all_node)
                     img_centre_all_node.append(img_centre_seq_all_node)
 
-                self.feature_save_folder = 'U:/thesis_code/data/nodes_and_features/' + str(self.data_type)
+                self.feature_save_folder = './data/nodes_and_features/' + str(self.data_type)
                 self.feature_save_path = os.path.join(self.feature_save_folder, str(i) + '.pkl')
                 if not os.path.exists(self.feature_save_folder):
                     os.makedirs(self.feature_save_folder)

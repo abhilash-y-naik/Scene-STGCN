@@ -3,6 +3,7 @@ visualisation
 data_visualisation
 error
 pretrained_models/*
+data
 data/data/graph/*
 data/data/graph.zip/*
 data/data/pie/*
@@ -18,4 +19,5 @@ graph_model/network
 pie_model/__pycache__
 visualisation/*
 torchlight
-
+poses
+job.sh
