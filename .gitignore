@@ -18,3 +18,4 @@ graph_model/network
 pie_model/__pycache__
 visualisation/*
 torchlight
+
