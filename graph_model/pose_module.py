@@ -1,40 +1,8 @@
-# import os
-# import numpy as np
-# import pickle
-# path = 'U:/thesis_code/poses/pose_set01.pkl'
-# with open(os.path.join(path), 'rb') as fid:
-#     try:
-#         pose_set = pickle.load(fid)
-#     except:
-#         pose_set = pickle.load(fid, encoding='bytes')
-#
-# print(len(pose_set['video_0001']['14019_1_1_18']))
-# print(len(np.zeros((36))))
-# exit()
-
-
-import numpy as np
-import torch
-import pickle
-import torch
-# path  = 'U:/thesis_code/poses/pose_set01.pkl'
-# with open(path, 'rb') as fid:
-#     try:
-#         variable = pickle.load(fid)
-#     except:
-#         variable = pickle.load(fid, encoding='bytes')
-#
-#
-# print(variable['video_0001'])
-# exit()
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
-import sys
 import numpy as np
-import sys
+
 class Graph():
     """ The Graph to model the skeletons extracted by the openpose
 
@@ -59,7 +27,7 @@ class Graph():
 
     def __init__(self,
                  layout='openpose',
-                 strategy='uniform',
+                 strategy='spatial',
                  max_hop=1,
                  dilation=1):
         self.max_hop = max_hop
@@ -194,7 +162,7 @@ def normalize_undigraph(A):
     DAD = np.dot(np.dot(Dn, A), Dn)
     return DAD
 
-class ConvTemporalGraphical(nn.Module):
+class ConvTemporalGraphical_Pose(nn.Module):
 
     r"""The basic module for applying a graph convolution.
 
@@ -257,6 +225,89 @@ class ConvTemporalGraphical(nn.Module):
 
         return x.contiguous(), A
 
+class st_gcn_pose(nn.Module):
+    r"""Applies a spatial temporal graph convolution over an input graph sequence.
+
+    Args:
+        in_channels (int): Number of channels in the input sequence data
+        out_channels (int): Number of channels produced by the convolution
+        kernel_size (tuple): Size of the temporal convolving kernel and graph convolving kernel
+        stride (int, optional): Stride of the temporal convolution. Default: 1
+        dropout (int, optional): Dropout rate of the final output. Default: 0
+        residual (bool, optional): If ``True``, applies a residual mechanism. Default: ``True``
+
+    Shape:
+        - Input[0]: Input graph sequence in :math:`(N, in_channels, T_{in}, V)` format
+        - Input[1]: Input graph adjacency matrix in :math:`(K, V, V)` format
+        - Output[0]: Output graph sequence in :math:`(N, out_channels, T_{out}, V)` format
+        - Output[1]: Graph adjacency matrix for output data in :math:`(K, V, V)` format
+
+        where
+            :math:`N` is a batch size,
+            :math:`K` is the spatial kernel size, as :math:`K == kernel_size[1]`,
+            :math:`T_{in}/T_{out}` is a length of input/output sequence,
+            :math:`V` is the number of graph nodes.
+
+    """
+
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 dropout=0,
+                 residual=True):
+        super().__init__()
+
+        assert len(kernel_size) == 2
+        assert kernel_size[0] % 2 == 1
+        padding = ((kernel_size[0] - 1) // 2, 0)
+
+        self.gcn = ConvTemporalGraphical_Pose(in_channels, out_channels,
+                                         kernel_size[1])
+
+        self.tcn = nn.Sequential(
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(
+                out_channels,
+                out_channels,
+                (kernel_size[0], 1),
+                (stride, 1),
+                padding,
+            ),
+            nn.BatchNorm2d(out_channels),
+            nn.Dropout(dropout, inplace=True),
+        )
+
+        if not residual:
+            self.residual = lambda x: 0
+
+        elif (in_channels == out_channels) and (stride == 1):
+            self.residual = lambda x: x
+
+        else:
+            self.residual = nn.Sequential(
+                nn.Conv2d(
+                    in_channels,
+                    out_channels,
+                    kernel_size=1,
+                    stride=(stride, 1)),
+                nn.BatchNorm2d(out_channels),
+            )
+
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x, A):
+
+        res = self.residual(x)
+        x, A = self.gcn(x, A)
+        x = self.tcn(x) + res
+
+        return self.relu(x), A
+
+
+
 
 class Model(nn.Module):
     r"""Spatial temporal graph convolutional networks.
@@ -294,16 +345,16 @@ class Model(nn.Module):
         kwargs0 = {k: v for k, v in kwargs.items() if k != 'dropout'}
 
         self.st_gcn_networks = nn.ModuleList((
-            st_gcn(in_channels, 64, kernel_size, 1, residual=False, **kwargs0),
-            st_gcn(64, 64, kernel_size, 1, **kwargs),
-            st_gcn(64, 64, kernel_size, 1, **kwargs),
-            st_gcn(64, 64, kernel_size, 1, **kwargs),
-            st_gcn(64, 128, kernel_size, 2, **kwargs),
-            st_gcn(128, 128, kernel_size, 1, **kwargs),
-            st_gcn(128, 128, kernel_size, 1, **kwargs),
-            st_gcn(128, 256, kernel_size, 2, **kwargs),
-            st_gcn(256, 256, kernel_size, 1, **kwargs),
-            st_gcn(256, 256, kernel_size, 1, **kwargs),
+            st_gcn_pose(in_channels, 64, kernel_size, 1, residual=False, **kwargs0),
+            st_gcn_pose(64, 64, kernel_size, 1, **kwargs),
+            st_gcn_pose(64, 64, kernel_size, 1, **kwargs),
+            st_gcn_pose(64, 64, kernel_size, 1, **kwargs),
+            st_gcn_pose(64, 128, kernel_size, 2, **kwargs),
+            st_gcn_pose(128, 128, kernel_size, 1, **kwargs),
+            st_gcn_pose(128, 128, kernel_size, 1, **kwargs),
+            st_gcn_pose(128, 256, kernel_size, 2, **kwargs),
+            st_gcn_pose(256, 256, kernel_size, 1, **kwargs),
+            st_gcn_pose(256, 256, kernel_size, 1, **kwargs),
         ))
 
         # initialize parameters for edge importance weighting
@@ -359,276 +410,10 @@ class Model(nn.Module):
             x, _ = gcn(x, self.A * importance)
 
         _, c, t, v = x.size()
-        feature = x.view(N, M, c, t, v).permute(0, 2, 3, 4, 1)
+        feature = x.view(N, c, t, v).permute(0, 2, 3, 4, 1)
 
         # prediction
         x = self.fcn(x)
-        output = x.view(N, M, -1, t, v).permute(0, 2, 3, 4, 1)
+        output = x.view(N, -1, t, v).permute(0, 2, 3, 4, 1)
 
         return output, feature
-
-
-class st_gcn(nn.Module):
-    r"""Applies a spatial temporal graph convolution over an input graph sequence.
-
-    Args:
-        in_channels (int): Number of channels in the input sequence data
-        out_channels (int): Number of channels produced by the convolution
-        kernel_size (tuple): Size of the temporal convolving kernel and graph convolving kernel
-        stride (int, optional): Stride of the temporal convolution. Default: 1
-        dropout (int, optional): Dropout rate of the final output. Default: 0
-        residual (bool, optional): If ``True``, applies a residual mechanism. Default: ``True``
-
-    Shape:
-        - Input[0]: Input graph sequence in :math:`(N, in_channels, T_{in}, V)` format
-        - Input[1]: Input graph adjacency matrix in :math:`(K, V, V)` format
-        - Output[0]: Output graph sequence in :math:`(N, out_channels, T_{out}, V)` format
-        - Output[1]: Graph adjacency matrix for output data in :math:`(K, V, V)` format
-
-        where
-            :math:`N` is a batch size,
-            :math:`K` is the spatial kernel size, as :math:`K == kernel_size[1]`,
-            :math:`T_{in}/T_{out}` is a length of input/output sequence,
-            :math:`V` is the number of graph nodes.
-
-    """
-
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size,
-                 stride=1,
-                 dropout=0,
-                 residual=True):
-        super().__init__()
-
-        assert len(kernel_size) == 2
-        assert kernel_size[0] % 2 == 1
-        padding = ((kernel_size[0] - 1) // 2, 0)
-
-        self.gcn = ConvTemporalGraphical(in_channels, out_channels,
-                                         kernel_size[1])
-
-        self.tcn = nn.Sequential(
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(
-                out_channels,
-                out_channels,
-                (kernel_size[0], 1),
-                (stride, 1),
-                padding,
-            ),
-            nn.BatchNorm2d(out_channels),
-            nn.Dropout(dropout, inplace=True),
-        )
-
-        if not residual:
-            self.residual = lambda x: 0
-
-        elif (in_channels == out_channels) and (stride == 1):
-            self.residual = lambda x: x
-
-        else:
-            self.residual = nn.Sequential(
-                nn.Conv2d(
-                    in_channels,
-                    out_channels,
-                    kernel_size=1,
-                    stride=(stride, 1)),
-                nn.BatchNorm2d(out_channels),
-            )
-
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, x, A):
-
-        res = self.residual(x)
-        x, A = self.gcn(x, A)
-        x = self.tcn(x) + res
-
-        return self.relu(x), A
-
-
-pose_model = Model(3, 400 , edge_importance_weighting=True,
-                   graph_args ={'layout' : 'openpose', 'strategy': 'spatial'} )
-
-pretrained_dict = torch.load('U:/thesis_code/pretrained_models/st_gcn.kinetics.pt')
-# for keys in pretrained_dict.keys():
-#     print(keys)
-pose_model.load_state_dict(pretrained_dict)
-pose_model= nn.Sequential(*list(pose_model.children())[:-2])
-print(pose_model.eval())
-# for name, param in pose_model.named_parameters():
-#     print(name)
-exit()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# from keras.preprocessing.image import img_to_array, load_img
-# # torch.cuda.empty_cache()
-# # exit()
-# from torch.autograd import Variable
-# import tarfile
-# #
-# # print(np.round(0.5))
-#
-# # from graph_model import network
-# # model = network.deeplabv3plus_mobilenet(num_classes=19, output_stride=16).cuda()
-# # model.load_state_dict(torch.load(fname)["model_state"])
-# # pic = './graph_model/Screenshot.png'
-# # img_data = load_img(pic)
-# # # print(img_data.shape)
-# # image_array = img_to_array(img_data).reshape(3, 768, 1366)
-# # # print(image_array.shape)
-# # image_array = Variable(torch.from_numpy(image_array).unsqueeze(0)).float().cuda()
-# # print(image_array.shape)
-# # image_features = model(image_array)
-# # image_features = image_features.data.to('cpu').numpy()
-# # print(model.eval())
-# # print(image_features.shape)
-# # exit()
-
-# # from graph_model.pie_data import PIE
-# # #
-# # data_opts = {'fstride': 1,
-# #              'sample_type': 'all',
-# #              'height_rng': [0, float('inf')],
-# #              'squarify_ratio': 0,
-# #              'data_split_type': 'default',  # kfold, random, default
-# #              'seq_type': 'intention',  # crossing , intention
-# #              'min_track_size': 0,  # discard tracks that are shorter
-# #              'max_size_observe': 15,  # number of observation frames
-# #              'max_size_predict': 5,  # number of prediction frames
-# #              'seq_overlap_rate': 0.5,  # how much consecutive sequences overlap
-# #              'balance': True,  # balance the training and testing samples
-# #              'crop_type': 'context',  # crop 2x size of bbox around the pedestrian
-# #              'crop_mode': 'pad_resize',  # pad with 0s and resize to VGG input
-# #              'encoder_input_type': [],
-# #              'decoder_input_type': ['bbox'],
-# #              'output_type': ['intention_binary']
-# #              }
-#
-# # imdb = PIE(data_path= './PIE_dataset')
-# # beh_seq_train = imdb.generate_data_trajectory_sequence('test', **data_opts)
-# # beh_seq_train = imdb.balance_samples_count(beh_seq_train, label_type='intention_binary')
-#
-def normalize_undigraph(A):
-    Dl = np.sum(A, 0)
-    num_node = A.shape[0]
-    Dn = np.zeros((num_node, num_node))
-    for i in range(num_node):
-        if Dl[i] > 0:
-            Dn[i, i] = Dl[i] ** (-0.5)
-
-    # Dn[np.isinf(Dn)] = 0.
-    # print(np.dot(Dn, A))
-
-    DAD = np.dot(np.dot(Dn, A), Dn)
-
-    return DAD
-# # def normalize_digraph(A):
-# #     Dl = np.sum(A, 0)
-# #     num_node = A.shape[0]
-# #     Dn = np.zeros((num_node, num_node))
-# #     for i in range(num_node):
-# #         if Dl[i] > 0:
-# #             Dn[i, i] = Dl[i]**(-1)
-# #     AD = np.dot(A, Dn)
-# #     return AD
-np.random.seed(2)
-x = np.random.randint(1,5,size=(1,3))
-# # A = np.random.randint(0,2,size=(1, 5, 3, 3))
-# # importance = np.random.randint(2,3,size=(5,1,1))
-A = np.zeros((3,3))
-A[0, 0] = 1
-A[1, 0] = 0.1
-A[2, 0] = 0
-A[0, 1] = 0.1
-A[0, 2] = 0
-A[1,1] = 1
-A[2,2] = 1
-
-x = torch.from_numpy(x.astype(np.float64))
-
-# # print(importance)
-print('x\n', x)
-# x1 = torch.sum(x,dim=2).reshape(5,-1)
-# # print('x\n', x[:, 0:1])
-# # # x2 = x.permute(0,2,1,3).contiguous()
-# # # print('x\n',x2)
-# #
-print('A\n',A)
-print('A1\n', normalize_undigraph(A))
-
-# # print('A2\n', normalize_digraph(A))
-A1 = torch.from_numpy(normalize_undigraph(A))
-
-x = torch.einsum('nw,vw->nv', (x, A1))
-print('X\n', x)
-# # print(torch.cuda.device_count())
-# # print(torch.cuda.get_device_name(0))
-# #
-# # import os
-# # # fname = './graph_model/checkpoints/best_deeplabv3plus_mobilenet_cityscapes_os16.pth'
-# # path = 'U:/thesis_code/data/data/graph/train/features_context_pad_resize/vgg16_bn'
-# # img_folder = os.listdir(path)
-# # # print(img_folder)
-# #
-# # for img_f in img_folder:
-# #     new_path = os.path.join(path, img_f)
-# #     files = os.listdir(new_path)
-# #     for file in files:
-# #         for pick in os.listdir(os.path.join(new_path, file)):
-# #             if (pick.split('.pkl')[0].split('_')[-1]) == '0':
-# #                 del_path = os.path.join(new_path, file, pick)
-# #                 os.remove(del_path)
-#                 # print(del_path)
-#
-#
-#
-# # import os
-# # # fname = './graph_model/checkpoints/best_deeplabv3plus_mobilenet_cityscapes_os16.pth'
-# # path = 'D:/thesis_analysis'
-# # img_folder = os.listdir(path)
-# # print(img_folder)
-# # for img_f in img_folder:
-#     # if img_f == 'error_3' or img_f == 'error_2':
-#
-# # new_path = os.path.join(path, 'error_3')
-# # files = os.listdir(new_path)
-# # new_path = os.path.join(path, 'error')
-# # files1 = os.listdir(new_path)
-# # count = 0
-# # for f in files:
-# #     if f not in files1:
-# #         print(f)
-# #         count += 1
-# #
-# # print(count)
-#             # for pick in os.listdir(os.path.join(new_path, file)):
-#             #     if (pick.split('.pkl')[0].split('_')[-1]) == '0':
-#             #         del_path = os.path.join(new_path, file, pick)
-#             #         os.remove(del_path)
-#             #         print(del_path)

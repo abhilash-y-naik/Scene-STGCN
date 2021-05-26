@@ -67,7 +67,7 @@ def train_intent(train_test, model, data_path):
                 saved_files_path = pretrained_model_path
             beh_seq_test = imdb.generate_data_trajectory_sequence('test', **data_opts)
 
-            # beh_seq_test = imdb.balance_samples_count(beh_seq_test, label_type='intention_binary')
+            beh_seq_test = imdb.balance_samples_count(beh_seq_test, label_type='intention_binary')
             acc, f1, pre, rec = t.test_chunk(beh_seq_test, data_opts, saved_files_path, False)
 
             t = PrettyTable(['Acc', 'F1', 'Precision', 'Recall'])
@@ -90,7 +90,7 @@ def train_intent(train_test, model, data_path):
 
         t = PIEIntent()
 
-        pretrained_model_path = 'data/graph/intention/07May2021-14h03m52s'
+        pretrained_model_path = 'data/graph/intention/26May2021-07h16m14s'
         # pretrained_model_path = 'graph_model/pretrained weight'
         if train_test < 2:  # Train
 

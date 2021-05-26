@@ -33,11 +33,11 @@ class Dataset(torch.utils.data.Dataset):
         self.unique_bbox = self.dataset['unique_bbox']
         self.unique_image = self.dataset['unique_image']
 
-        self.node_info = {'pedestrian': 1,  # default should be one
+        self.node_info = {'pedestrian': 2,  # default should be one
                           'vehicle': 0,
-                          'traffic_light': 0,
+                          'traffic_light': 1,
                           'sign': 0,
-                          'crosswalk': 0,
+                          'crosswalk': 1,
                           'transit_station': 0,
                           'ego_vehicle': 0}
 
@@ -62,6 +62,13 @@ class Dataset(torch.utils.data.Dataset):
                                                 'crop_mode'],  # images
                                   model_name='vgg16_bn',
                                   data_subset=self.data_type, ind=1)
+        pose_set = {}
+        for i in range(6):
+            with open(os.path.join('U:/thesis_code/poses/pose_set0' + str(i+1) + '.pkl'), 'rb') as fid:
+                try:
+                    pose_set['set0'+ str(str(i+1))] = pickle.load(fid)
+                except:
+                    pose_set['set0'+ str(str(i+1))] = pickle.load(fid, encoding='bytes')
 
         variable = False
         if variable:
@@ -85,6 +92,7 @@ class Dataset(torch.utils.data.Dataset):
         count_traflig = []
         count_transit = []
         count_cross = []
+        pose_donotexit = 0
         if self.regen_pkl:
             i = -1
             for img_sequences, bbox_sequences, ped_ids in zip(self.track['images'],
@@ -98,6 +106,7 @@ class Dataset(torch.utils.data.Dataset):
                 node_features = []
                 img_centre_seq = []
                 bbox_location_seq = []
+                primary_pedestrian_pose = []
                 if int(self.track['output'][i][0]) == 1:
                     count_positive_samples += 1
                 for imp, b, p in zip(img_sequences, bbox_sequences, ped_ids):
@@ -107,6 +116,8 @@ class Dataset(torch.utils.data.Dataset):
                     set_id = imp.split('/')[-3]
                     vid_id = imp.split('/')[-2]
                     img_name = imp.split('/')[-1].split('.')[0]
+                    pose_s = pose_set[str(set_id)]
+                    pose_vid = pose_s[str(vid_id)]
 
                     key = str(set_id + vid_id)
                     frames = self.unique_frames[key].tolist()
@@ -165,6 +176,12 @@ class Dataset(torch.utils.data.Dataset):
                                     img_features_unsorted[object_keys].append([img_save_path])
                                     img_centre_unsorted[object_keys].append(self.get_center(bb))
                                     bbox_location_unsorted[object_keys].append(bb)
+                                    key = os.path.join( im_name + '_' + n[0])
+                                    if str(key) in pose_vid.keys():
+                                        primary_pedestrian_pose.append(pose_vid[str(key)])
+                                    else:
+                                        primary_pedestrian_pose.append(np.zeros((36)))
+                                        pose_donotexit += 1
 
                         for idx, (n, bb, im) in enumerate(
                                 zip(ped[index][object_keys], box[index][object_keys], image[index][object_keys])):
@@ -244,6 +261,7 @@ class Dataset(torch.utils.data.Dataset):
                     all_node_features = []
                     bbox_location_seq_all_node = []
                     img_centre_seq_all_node = []
+                    # print(node_features[0].keys())
                     for k in node_features[0]:
                         if k == 'pedestrian':
                             count_ped.append(len(node_features[s][k]))
@@ -276,6 +294,7 @@ class Dataset(torch.utils.data.Dataset):
                                 if num < self.node_info['traffic_light']:
                                     all_node_features.append(saving_nodes[0])
                                     bbox_location_seq_all_node.append(saving_nodes[1])
+                                    img_centre_seq_all_node.append(saving_nodes[2])
 
                         if k == 'transit_station':
                             count_transit.append(len(node_features[s][k]))
@@ -329,9 +348,9 @@ class Dataset(torch.utils.data.Dataset):
                 if not os.path.exists(self.feature_save_folder):
                     os.makedirs(self.feature_save_folder)
                 with open(self.feature_save_path, 'wb') as fid:
-                    pickle.dump((img_centre_all_node, all_node_features_seq, bbox_location_all_node), fid,
+                    pickle.dump((img_centre_all_node, all_node_features_seq, bbox_location_all_node, primary_pedestrian_pose), fid,
                                 pickle.HIGHEST_PROTOCOL)
-
+        print('Number of Pose desnot exists:', pose_donotexit)
         # print('\nNumber of Positive samples(Crossing):', count_positive_samples)
         # print('Number of Negative samples(Non-crossing):', self.num_examples-count_positive_samples )
         # name = count_cross
@@ -398,7 +417,7 @@ class Dataset(torch.utils.data.Dataset):
         #                                                                  model_name='vgg16_bn',
         #                                                                  data_subset=self.data_type))
 
-        graph, adj_matrix, adj_matrix_loc, decoder_input = self.load_images_and_process(index)
+        graph, adj_matrix, adj_matrix_loc, decoder_input, ped_pose = self.load_images_and_process(index)
 
         if index % 2000 == 0:
             print(decoder_input[0])
@@ -407,7 +426,8 @@ class Dataset(torch.utils.data.Dataset):
         train_data = torch.from_numpy(graph), \
                      torch.from_numpy(adj_matrix), \
                      torch.from_numpy(adj_matrix_loc), \
-                     torch.from_numpy(decoder_input),\
+                     torch.from_numpy(decoder_input), \
+                     torch.from_numpy(ped_pose.astype(np.float64)), \
                      torch.from_numpy(self.track['output'][index][0])
         return train_data
 
@@ -536,9 +556,9 @@ class Dataset(torch.utils.data.Dataset):
 
         with open(os.path.join(self.feature_save_folder, str(index) + '.pkl'), 'rb') as fid:
             try:
-                img_centre_seq, node_features, bbox_location_seq = pickle.load(fid)
+                img_centre_seq, node_features, bbox_location_seq, ped_pose = pickle.load(fid)
             except:
-                img_centre_seq, node_features, bbox_location_seq = pickle.load(fid, encoding='bytes')
+                img_centre_seq, node_features, bbox_location_seq, ped_pose = pickle.load(fid, encoding='bytes')
 
         max_nodes = self.max_nodes
 
@@ -548,11 +568,13 @@ class Dataset(torch.utils.data.Dataset):
         adj_matrix = np.zeros((self.seq_len, max_nodes, max_nodes))
         adj_matrix_loc = np.zeros((self.seq_len, max_nodes, max_nodes))
         # adj_matrix = np.zeros((max_nodes, max_nodes))
-
+        pose = np.zeros((self.seq_len, 18, 3))
         for s in range(self.seq_len):
 
             step = node_features[s]
             bbox_location = bbox_location_seq[s]
+            pose[s, :, 0:2] = np.asarray(ped_pose[s]).reshape(18, 2)
+            pose[s, :, -1] = 0.5
 
             img_cp_p = img_centre_seq[s][0]
             for h, stp in enumerate(step):
@@ -566,6 +588,7 @@ class Dataset(torch.utils.data.Dataset):
                 img_features = np.squeeze(img_features)
                 graph[s, h, :] = img_features
                 decoder_input[s, h, :] = bbox_location[h]
+
                 # decoder_input[s, h, :] = bbox_location[h]
                 adj_matrix[h, h] = 1
                 adj_matrix_loc[s, h, h] = 1
@@ -591,7 +614,7 @@ class Dataset(torch.utils.data.Dataset):
         if visualise:
             self.visualisation(self.seq_len, node_features, img_centre_seq)
 
-        return graph, adj_matrix, adj_matrix_loc, decoder_input
+        return graph, adj_matrix, adj_matrix_loc, decoder_input, pose
 
     def __len__(self):
         return self.num_examples

@@ -3,6 +3,7 @@ import math
 import sys
 
 import torch
+import torchlight
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
@@ -11,7 +12,7 @@ from torch.nn.parameter import Parameter
 from torch.nn.modules.module import Module
 
 import torch.optim as optim
-
+from graph_model.pose_module import Model
 
 class ConvTemporalGraphical(nn.Module):
     # Source : https://github.com/yysijie/st-gcn/blob/master/net/st_gcn.py
@@ -64,6 +65,7 @@ class ConvTemporalGraphical(nn.Module):
         assert A.size(1) == self.kernel_size
         x = self.conv(x)
         x = torch.einsum('nctv,ntvw->nctw', (x, A))
+
         return x.contiguous(), A
 
 
@@ -152,9 +154,10 @@ class st_gcn(nn.Module):
 
         return x, A
 
+
 class social_stgcnn(nn.Module):
     def __init__(self,
-                    max_nodes, node_info):
+                    max_nodes, node_info = ''):
         super(social_stgcnn, self).__init__()
         seq_len = 15
         kernel_size = 3
@@ -162,14 +165,25 @@ class social_stgcnn(nn.Module):
 
         self.st_gcn_networks = nn.ModuleList((
             st_gcn(512*7*7, 64, (kernel_size, seq_len), 1, residual=False, dropout=0.5),
-            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
+            # st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
 
         ))
         self.st_gcn_networks_loc = nn.ModuleList((
             st_gcn(4, 64, (kernel_size, seq_len), 1, residual=False, dropout=0.5),
-            st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
+            # st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
 
         ))
+
+        # Action Recognition Module
+        self.st_gcn_networks_p = Model(3, 400, graph_args = {'layout': 'openpose',
+                      'strategy': 'spatial'}, edge_importance_weighting=True)
+
+        pretrained_dict = torch.load('U:/thesis_code/pretrained_models/st_gcn.kinetics.pt')
+        self.st_gcn_networks_p.load_state_dict(pretrained_dict)
+        self.st_gcn_networks_pose_bn = list(self.st_gcn_networks_p.children())[0]
+        self.st_gcn_networks_pose = nn.Sequential(*list(self.st_gcn_networks_p.children())[1:-2][0])
+        self.edge_importance_pose = list(self.st_gcn_networks_p.children())[-2:-1][0]
+
         self.seed = 12
         self.max_nodes = max_nodes
         torch.manual_seed(self.seed)
@@ -187,11 +201,11 @@ class social_stgcnn(nn.Module):
 
         else:
             self.edge_importance = [1] * len(self.st_gcn_networks)
-            self.edge_importance = [1] * len(self.st_gcn_networks_loc)
+            self.edge_importance_loc = [1] * len(self.st_gcn_networks_loc)
 
         # self.bn = nn.BatchNorm1d(128)
-
-        self.dec = nn.LSTM(128, 128, num_layers=1, bias=True,
+        self.pose_flat = nn.Flatten()
+        self.dec = nn.LSTM(384, 128, num_layers=1, bias=True,
                            batch_first=True, bidirectional=False)
 
         nn.init.xavier_normal_(self.dec.weight_hh_l0)
@@ -200,7 +214,7 @@ class social_stgcnn(nn.Module):
         self.fcn = nn.Linear(128, 1)
         nn.init.xavier_normal_(self.fcn.weight)
 
-    def forward(self, v, a, a_loc, loc):
+    def forward(self, v, a, a_loc, loc, pose_feature):
 
         b, t, n, c, h, w = v.size()
         v = v.permute(0, 3, 4, 5, 1, 2).contiguous()
@@ -213,13 +227,31 @@ class social_stgcnn(nn.Module):
         for graph, imp_loc in zip(self.st_gcn_networks_loc, self.edge_importance):
             loc, _ = graph(loc, a_loc*imp_loc)
 
+        ###############################################################################################
+        # Pose Module
+        pose_feature = pose_feature.permute(0, 3, 1, 2).contiguous()
+        N, C, T, V = pose_feature.size()
+        pose_feature = pose_feature.permute(0, 3, 1, 2).contiguous()
+        pose_feature = pose_feature.view(N, V * C, T)
+        pose_feature = self.st_gcn_networks_pose_bn(pose_feature)
+        pose_feature = pose_feature.view(N, V, C, T)
+        pose_feature = pose_feature.permute(0, 2, 3, 1).contiguous()
+        pose_feature = pose_feature.view(N, C, T, V)
+
+        for graph, imp_pose in zip(self.st_gcn_networks_pose, self.edge_importance_pose):
+            pose_feature, _ = graph(pose_feature, self.st_gcn_networks_p.A*imp_pose)
+        # pose = self.st_gcn_networks_pose(pose_feature)
+        pose_feature = F.avg_pool2d(pose_feature, pose_feature.size()[2:])
+        pose_feature = self.pose_flat(pose_feature)
+        pose_feature = pose_feature.repeat(1, T).reshape(N, T, -1)
+        pose_feature = pose_feature.permute(0, 2, 1).contiguous()
+        ##############################################################################################
+
         v = v[:, :, :, 0]
 
         loc = loc[:, :, :, 0]
 
-        # print(v.shape)
-        # print(loc.shape)
-        x = torch.cat((v, loc), dim=1)
+        x = torch.cat((v, loc, pose_feature), dim=1)
         x = x.permute(0, 2, 1).contiguous()
 
         # x = self.bn(x.permute(0, 2, 1).contiguous())

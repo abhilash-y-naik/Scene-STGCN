@@ -74,8 +74,8 @@ class PIEIntent(object):
         self.obs_seq_len = seq_len
         self.kernel_size = kernel_size
         self.pred_seq_len = pred_seq_len
-        self.seed = 101314772952300
-        # self.seed = 12
+        # self.seed = 101314772952300
+        self.seed = 12
         torch.manual_seed(self.seed)
         torch.cuda.manual_seed(self.seed)
         # torch.cuda.manual_seed_all(self.seed)  # if you are using multi-GPU.
@@ -283,7 +283,7 @@ class PIEIntent(object):
               batch_size=128,
               epochs=400,
               optimizer_type='rmsprop',
-              optimizer_params={'lr': 0.00001, 'clipvalue': 0.0, 'decay': 0},
+              optimizer_params={'lr': 0.00009, 'clipvalue': 0.0, 'decay': 0},
               loss=['binary_crossentropy'],
               metrics=['acc'],
               data_opts=''):
@@ -335,8 +335,8 @@ class PIEIntent(object):
 
         self._sequence_length = self._encoder_seq_length
 
-        train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=True)
-        val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=True)
+        train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=False)
+        val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=False)
         # test_dataset = Dataset(data_test, test_d, data_opts, 'test', regen_pkl=True)
         # print(train_dataset.ped_data)
         # print(val_dataset.ped_data)
@@ -513,20 +513,21 @@ class PIEIntent(object):
             batch_losses = []
             y_true = []
             y_pred = []
-            for step, (graph, adj_matrix, adj_matrix_loc, location, label) in enumerate(train_loader):
+            for step, (graph, adj_matrix, adj_matrix_loc, location, ped_pose, label) in enumerate(train_loader):
                 if count % 10 == 0:
                     print(count)
                 count = count + 1
 
                 G = Variable(graph.type(torch.FloatTensor)).cuda()
-                A = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                A_loc = Variable(adj_matrix_loc.type(torch.FloatTensor)).cuda()
+                Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
+                Adj_loc = Variable(adj_matrix_loc.type(torch.FloatTensor)).cuda()
                 Loc = Variable(location.type(torch.FloatTensor)).cuda()
+                pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
                 label = Variable(label.type(torch.float)).cuda()
                 # print(label.shape)
                 # outputs, _ = train_model(G, A.squeeze(0))
                 # print(A)
-                outputs = train_model(G, A, A_loc, Loc)
+                outputs = train_model(G, Adj, Adj_loc, Loc, pose)
 
                 # if count % batch_size != 0 and step != turn_point_train:
                 #     l = loss_fn(outputs, label)
@@ -548,9 +549,9 @@ class PIEIntent(object):
                 loss = loss_fn(outputs, label)
 
                 # torch.cuda.list_gpu_processes(device=0)
-                loss += 0.01 * torch.norm(l2_dec, p=2) + \
-                        0.01 * torch.norm(l2_enc, p=2) + \
-                        0.01 * torch.norm(l2_enc_loc, p=2)
+                loss += 0.09 * torch.norm(l2_dec, p=2) + \
+                        0.09 * torch.norm(l2_enc, p=2) + \
+                        0.09 * torch.norm(l2_enc_loc, p=2)
                 batch_losses.append(loss.detach().item())
 
                 optimizer.zero_grad()  # (reset gradients)
@@ -621,21 +622,22 @@ class PIEIntent(object):
             y_pred = []
             val_loss = 0
             count = 0
-            for step, (graph, adj_matrix, adj_matrix_loc, location, label) in enumerate(val_loader):
+            for step, (graph, adj_matrix, adj_matrix_loc, location, ped_pose, label) in enumerate(val_loader):
                 with torch.no_grad():
                     if count % 10 == 0:
                         print(count)
                     count = count + 1
 
                     G = Variable(graph.type(torch.FloatTensor)).cuda()
-                    A = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                    A_loc = Variable(adj_matrix_loc.type(torch.FloatTensor)).cuda()
+                    Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
+                    Adj_loc = Variable(adj_matrix_loc.type(torch.FloatTensor)).cuda()
                     Loc = Variable(location.type(torch.FloatTensor)).cuda()
+                    pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
                     label = Variable(label.type(torch.float)).cuda()
                     # print(label.shape)
                     # outputs, _ = train_model(G, A.squeeze(0))
                     # print(A)
-                    outputs = train_model(G, A, A_loc, Loc)
+                    outputs = train_model(G, Adj, Adj_loc, Loc, pose)
                     # print(outputs.shape)
 
                     # if count % batch_size != 0 and step != turn_point_val:
@@ -658,9 +660,9 @@ class PIEIntent(object):
                     loss = loss_fn(outputs, label)
 
                     # torch.cuda.list_gpu_processes(device=0)
-                    loss += 0.01 * torch.norm(l2_dec, p=2) + \
-                            0.01 * torch.norm(l2_enc, p=2) + \
-                            0.01 * torch.norm(l2_enc_loc, p=2)
+                    loss += 0.09 * torch.norm(l2_dec, p=2) + \
+                            0.09 * torch.norm(l2_enc, p=2) + \
+                            0.09 * torch.norm(l2_enc_loc, p=2)
 
                     batch_losses.append(loss.data.cpu().numpy())
                     # val_loss += loss
@@ -740,7 +742,7 @@ class PIEIntent(object):
 
         train_params = configs[1]
         seq_length = configs[2]['max_size_observe']
-        overlap = 0
+        overlap = 1
         tracks, images, bboxes, ped_ids, frame_ids = self.get_tracks(data_test,
                                                           train_params['data_type'],
                                                           seq_length,
@@ -760,9 +762,9 @@ class PIEIntent(object):
                 'decoder_input': decoder_input,
                 'output': output}
 
-        test_dataset = Dataset_test(data_test, test_d, data_opts, 'test', regen_pkl=False)
+        test_dataset = Dataset(data_test, test_d, data_opts, 'test', regen_pkl=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-                                                  batch_size=1, shuffle=False,
+                                                  batch_size=128, shuffle=False,
                                                   pin_memory=False,
                                                   num_workers=4)
 
@@ -782,9 +784,9 @@ class PIEIntent(object):
         #################################################################################################
         # test_model.load_state_dict(pretrained_dict) # comment this line if you are using above code
 
-        test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_15.pth')))
-        print('epoch-15')
-        overlap = 0  # train_params ['overlap']
+        test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_4.pth')))
+        print('epoch-4')
+        # overlap = 1  # train_params ['overlap']
         # print(test_model.eval())
         def visualisation(seq_len, nodes, img_centre_seq, details):
             '''
@@ -849,15 +851,15 @@ class PIEIntent(object):
                 out.write(img_id)
             out.release()
 
-        for name, param in test_model.named_parameters():
+        # for name, param in test_model.named_parameters():
             # if name == 'edge_importance.0':
-                print(name)
-                print(param)
+            #     print(name)
+            #     print(param)
         # exit()
 
         #####################################################################################
 
-        # test_model.eval()  # (set in evaluation mode, this affects BatchNorm and dropout)
+        test_model.eval()  # (set in evaluation mode, this affects BatchNorm and dropout)
 
         count = 0
         some_count = 0
@@ -868,43 +870,26 @@ class PIEIntent(object):
         with open(model_path + '/misclassification.txt', 'wt') as fid:
             fid.write("####### Misclssification #######\n")
 
-            for step, (graph, adj_matrix, location, label, ped_ids, image, nodes, img_centre_seq) in enumerate(test_loader):
-            # for step, (graph, adj_matrix, location, label) in enumerate(test_loader):
+            # for step, (graph, adj_matrix, location, label, ped_ids, image, nodes, img_centre_seq) in enumerate(test_loader):
+            for step, (graph, adj_matrix, adj_matrix_loc, location, ped_pose, label) in enumerate(test_loader):
                 with torch.no_grad():
                     if count % 10 == 0:
                         print(count)
-                    count += 1
+                    count = count + 1
 
                     G = Variable(graph.type(torch.FloatTensor)).cuda()
-                    A = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                    loc = Variable(location.type(torch.FloatTensor)).cuda()
+                    Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
+                    Adj_loc = Variable(adj_matrix_loc.type(torch.FloatTensor)).cuda()
+                    Loc = Variable(location.type(torch.FloatTensor)).cuda()
+                    pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
                     label = Variable(label.type(torch.float)).cuda()
-
-
-                    # if int(label) == 0:
-                    #     counting_negatives += 1
                     # print(label.shape)
-                    # outputs, _ = test_model(G, A.squeeze(0))
-                    outputs = test_model(G, A, loc)
-                    # #
-                    if int(np.asarray(label.data.to('cpu'))) != int(np.round(torch.sigmoid(outputs).data.to('cpu'))):
-                        details = [int(np.asarray(label.data.to('cpu'))),
-                                   int(np.round(torch.sigmoid(outputs).data.to('cpu')))]
-                        fid.write("GT:" + str(np.asarray(label.data.to('cpu'))))
-                        fid.write("\n")
-                        fid.write(str(ped_ids[0]))
-                        fid.write("\n")
-                        fid.write(str(image[0]))
-                        fid.write("\n")
-
-                        print(ped_ids)
-                        print(image)
-                        visualisation(15, nodes, img_centre_seq, details)
-                        some_count += 1
+                    # outputs, _ = train_model(G, A.squeeze(0))
+                    # print(A)
+                    outputs = test_model(G, Adj, Adj_loc, Loc, pose)
 
 
                     y_true.append(np.asarray(label.data.to('cpu')))
-                    # y_pred.append(np.where(torch.sigmoid(outputs).data.to('cpu') > 0.5, 1, 0))
                     y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
                     y_s_pred.append(torch.sigmoid(outputs).data.to('cpu'))
 
@@ -914,7 +899,7 @@ class PIEIntent(object):
         y_true = np.concatenate(y_true, axis=0)
         y_pred = np.concatenate(y_pred, axis=0)
         y_s_pred = np.concatenate(y_s_pred, axis=0)
-        print(some_count)
+        # print(some_count)
 
         count_totalp = 0
         score_p = 0
