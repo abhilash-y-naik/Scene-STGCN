@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
 from torch.autograd import Variable
-import pytorch_lightning as pl  # To verify model parameters
+# import pytorch_lightning as pl  # To verify model parameters
 import matplotlib.pyplot as plt
 
 
@@ -74,10 +74,10 @@ class PIEIntent(object):
         self.obs_seq_len = seq_len
         self.kernel_size = kernel_size
         self.pred_seq_len = pred_seq_len
-        # self.seed = 101314772952300
-        self.seed = 12
-        torch.manual_seed(self.seed)
-        torch.cuda.manual_seed(self.seed)
+        # self.seed = 2309
+        self.seed = ''
+        # torch.manual_seed(self.seed)
+        # torch.cuda.manual_seed(self.seed)
         # torch.cuda.manual_seed_all(self.seed)  # if you are using multi-GPU.
         # np.random.seed(self.seed)  # Numpy module.
         # random.seed(self.seed)  # Python random module.
@@ -241,7 +241,7 @@ class PIEIntent(object):
 
         return d
 
-    def get_train_val_data(self, data, data_type, seq_length, overlap):
+    def get_train_val_data(self, data, data_type, seq_length, overlap, type, datasize = 500):
         """
         A helper function for data generation that combines different data types into a single
         representation.
@@ -260,19 +260,67 @@ class PIEIntent(object):
         if len(decoder_input) == 0:
             decoder_input = np.zeros(shape=np.array(bboxes).shape)
 
-        return {'images': images,
-                'bboxes': bboxes,
-                'ped_ids': ped_ids,
-                'frame_ids': frame_ids,
+        # if type == 'train':
+        #     count_p = 0
+        #     count_n = 0
+        #     images_s = []
+        #     bboxes_s = []
+        #     ped_ids_s = []
+        #     frame_ids_s = []
+        #     # encoder_input_s = []
+        #     decoder_input_s = []
+        #     output_s = []
+        #     for num_i, out_i in enumerate(output):
+        #         if out_i[0] == 1 and count_p < datasize:
+        #
+        #             count_p += 1
+        #             images_s.append(images[num_i])
+        #             bboxes_s.append(bboxes[num_i])
+        #             ped_ids_s.append(ped_ids[num_i])
+        #             frame_ids_s.append(frame_ids[num_i])
+        #             # encoder_input_s.append(encoder_input[num_i])
+        #             decoder_input_s.append(decoder_input[num_i])
+        #             output_s.append(output[num_i])
+        #
+        #         elif out_i[0] == 0 and count_n < datasize:
+        #
+        #             count_n += 1
+        #             images_s.append(images[num_i])
+        #             bboxes_s.append(bboxes[num_i])
+        #             ped_ids_s.append(ped_ids[num_i])
+        #             frame_ids_s.append(frame_ids[num_i])
+        #             # encoder_input_s.append(encoder_input[num_i])
+        #             decoder_input_s.append(decoder_input[num_i])
+        #             output_s.append(output[num_i])
+        # else:
+        #
+        #     images_s = images
+        #     bboxes_s = bboxes
+        #     ped_ids_s = ped_ids
+        #     frame_ids_s = frame_ids
+        #     decoder_input_s = decoder_input
+        #     output_s = output
+
+        images_s = images
+        bboxes_s = bboxes
+        ped_ids_s = ped_ids
+        frame_ids_s = frame_ids
+        decoder_input_s = decoder_input
+        output_s = output
+
+        return {'images': images_s,
+                'bboxes': bboxes_s,
+                'ped_ids': ped_ids_s,
+                'frame_ids': frame_ids_s,
                 'encoder_input': encoder_input,
-                'decoder_input': decoder_input,
-                'output': output}
+                'decoder_input': np.asarray(decoder_input_s),
+                'output': output_s}
 
     def get_model(self, max_nodes):
 
         # train_model = social_stgcnn(n_stgcnn=model['n_stgcnn'], n_txpcnn=model['n_txpcnn'],
         #                             seq_len=model['obs_seq_len'], kernel_size=model['kernel_size']).cuda()
-        train_model = social_stgcnn(max_nodes=max_nodes).cuda()
+        train_model = social_stgcnn(max_nodes=max_nodes, seed=self.seed, layers=3).cuda()
 
         return train_model
 
@@ -282,11 +330,13 @@ class PIEIntent(object):
               data_test,
               batch_size=128,
               epochs=400,
-              optimizer_type='rmsprop',
-              optimizer_params={'lr': 0.00009, 'clipvalue': 0.0, 'decay': 0},
+              optimizer_type='sgd',
+              optimizer_params={'lr': 0.0007, 'clipvalue': 0.0, 'decay': 0},
               loss=['binary_crossentropy'],
               metrics=['acc'],
-              data_opts=''):
+              data_opts='',
+              layers = 3,
+              datasize = 500):
 
         """
         Training method for the model
@@ -326,8 +376,9 @@ class PIEIntent(object):
         self._model_type = train_config['model']
         # data_opts['seq_overlap_rate']
         seq_length = data_opts['max_size_observe']
-        train_d = self.get_train_val_data(data_train, data_type, seq_length, 0.5)
-        val_d = self.get_train_val_data(data_val, data_type, seq_length, 0)
+        train_d = self.get_train_val_data(data_train, data_type, seq_length, 0.5, 'train', datasize)
+
+        val_d = self.get_train_val_data(data_val, data_type, seq_length, 0, 'val')
         # test_d = self.get_train_val_data(data_test, data_type, seq_length, 0)
 
         self._encoder_seq_length = train_d['decoder_input'].shape[1]
@@ -335,8 +386,12 @@ class PIEIntent(object):
 
         self._sequence_length = self._encoder_seq_length
 
-        train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=False)
-        val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=False)
+        # regen_pkl = False
+        # if layers == 0:
+        regen_pkl = True
+
+        train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=regen_pkl)
+        val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=regen_pkl)
         # test_dataset = Dataset(data_test, test_d, data_opts, 'test', regen_pkl=True)
         # print(train_dataset.ped_data)
         # print(val_dataset.ped_data)
@@ -389,7 +444,6 @@ class PIEIntent(object):
         # plt.savefig("U:/thesis_code/data_crosswalk1.png")
         # plt.close(1)
 
-
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                                    batch_size=128, shuffle=True, num_workers=4,
                                                    pin_memory=False)
@@ -412,6 +466,12 @@ class PIEIntent(object):
                                        file_name='configs',
                                        save_root_folder='data')
 
+        max_path, _ = self.get_path(type_save='models',
+                                       model_name=train_config['model'],
+                                       models_save_folder=model_folder_name,
+                                       file_name='max',
+                                       save_root_folder='data')
+
         # Save config and training param files
         with open(config_path + '.pkl', 'wb') as fid:
             pickle.dump([self.get_model_config(),
@@ -428,11 +488,11 @@ class PIEIntent(object):
             fid.write("\n####### Data options #######\n")
             fid.write(str(data_opts))
 
-        train_model = social_stgcnn(max_nodes=train_dataset.max_nodes,
-                                    node_info=train_dataset.node_info).cuda()
+        train_model = social_stgcnn(max_nodes=train_dataset.max_nodes, seed=self.seed,
+                                    node_info=train_dataset.node_info, layers=layers).cuda()
 
         # print(torch.seed())
-        # pretrained_dict = torch.load('./graph_model/pretrained_weight/pie_weight100.pth')
+        # pretrained_dict = torch.load('./data/graph/intention/31May2021-19h26m29s/model_epoch_13.pth')
 
 
         # ##############################################################################################
@@ -452,10 +512,12 @@ class PIEIntent(object):
         # print(train_model.eval())
 
         # for name, param in train_model.named_parameters():
-            # if name == 'encoder_model.cell_list.0.conv.weight' or name == 'encoder_model.cell_list.0.conv.bias':
-            #     param.requires_grad = False
-            # print(name)
-            # print(param)
+        #     if 'st_gcn_networks_p' in name:
+        #         param.requires_grad = False
+            # else:
+                # print(name)
+
+        # exit()
         ## To check paramters using pytorch lightning
         #
         # trainer = pl.Trainer()
@@ -463,13 +525,16 @@ class PIEIntent(object):
         # filter(lambda p: p.requires_grad, train_model.parameters()
         #################################################################################################
         # Optimisers , learning rate schedulers and loss function
-        optimizer = torch.optim.RMSprop(train_model.parameters(),
-                                        lr=optimizer_params['lr'],
-                                        weight_decay=optimizer_params['decay'])
+        # optimizer = torch.optim.RMSprop(train_model.parameters(),
+        #                                 lr=optimizer_params['lr'],
+        #                                 weight_decay=optimizer_params['decay'])
 
-        # optimizer = torch.optim.SGD(train_model.parameters(),
-        #                             lr=optimizer_params['lr'],
-        #                             momentum=0.9)
+        optimizer = torch.optim.SGD(train_model.parameters(),
+                                    lr=optimizer_params['lr'],
+                                    momentum=0.9)
+
+        # optimizer = torch.optim.Adam(train_model.parameters(),
+        #                             lr=optimizer_params['lr'])
 
         # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
         #                                                 mode='min',
@@ -479,9 +544,10 @@ class PIEIntent(object):
         #                                                 verbose=True)
 
         # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10,
-        #                                                  eta_min=1e-5,
+        #                                                  eta_min=1e-4,
         #                                                  last_epoch=-1)
 
+        # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, [20], gamma=0.1, last_epoch=-1)
         loss_fn = nn.BCEWithLogitsLoss()
 
         #################################################################################################
@@ -498,14 +564,19 @@ class PIEIntent(object):
         best_accuracy = 0
         epoch_losses_val = []
         epoch_accuracy_val = []
+
+        max_TN = 0.5
+        max_acc = 0
+        max_epochs = 0
+
         for epoch in range(epochs):
             accuracy = 0
             count = 0
             print("###########################")
             print("######## NEW EPOCH ########")
             print("###########################")
+            # print("epoch: %d/%d" % (epoch + 1, epochs), "lr: ", scheduler.get_lr()[0])
             print("epoch: %d/%d" % (epoch + 1, epochs))
-
             ###########################################################################
             # train:
             ###########################################################################
@@ -513,7 +584,9 @@ class PIEIntent(object):
             batch_losses = []
             y_true = []
             y_pred = []
+            y_s_pred = []
             for step, (graph, adj_matrix, adj_matrix_loc, location, ped_pose, label) in enumerate(train_loader):
+
                 if count % 10 == 0:
                     print(count)
                 count = count + 1
@@ -547,12 +620,14 @@ class PIEIntent(object):
                 l2_dec = torch.cat([x.view(-1) for x in train_model.dec.parameters()])
 
                 loss = loss_fn(outputs, label)
-
+                batch_losses.append(loss.data.cpu().numpy())
                 # torch.cuda.list_gpu_processes(device=0)
-                loss += 0.09 * torch.norm(l2_dec, p=2) + \
-                        0.09 * torch.norm(l2_enc, p=2) + \
-                        0.09 * torch.norm(l2_enc_loc, p=2)
-                batch_losses.append(loss.detach().item())
+                loss += 0.01 * torch.norm(l2_dec, p=1) + \
+                        0.001 * torch.norm(l2_enc_loc, p=2) + \
+                        0.05 * torch.norm(l2_enc, p=2)
+
+                #
+
 
                 optimizer.zero_grad()  # (reset gradients)
                 loss.backward()  # (compute gradients)
@@ -562,16 +637,16 @@ class PIEIntent(object):
                 y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
 
 
-
             # scheduler.step()
             # print(counting_negatives)
             y_true = np.concatenate(y_true, axis=0)
             y_pred = np.concatenate(y_pred, axis=0)
 
-            # TN = confusion_matrix(y_true, y_pred)[0, 0]
-            # FP = confusion_matrix(y_true, y_pred)[0, 1]
-            # FN = confusion_matrix(y_true, y_pred)[1, 0]
-            # TP = confusion_matrix(y_true, y_pred)[1, 1]
+
+            TN = confusion_matrix(y_true, y_pred)[0, 0]
+            FP = confusion_matrix(y_true, y_pred)[0, 1]
+            FN = confusion_matrix(y_true, y_pred)[1, 0]
+            TP = confusion_matrix(y_true, y_pred)[1, 1]
             accuracy = accuracy_score(y_true, y_pred)
             epoch_loss = np.mean(batch_losses)
             epoch_losses_train.append(epoch_loss)
@@ -579,8 +654,8 @@ class PIEIntent(object):
             print("train loss: %g" % epoch_loss)
             print("Accuracy:  %g" % accuracy)
             print('CONFUSION MATRIX:')
-            # print("TP: %g" % TP, "FP: %g" % FP)
-            # print("FN: %g" % FN, "TN: %g" % TN)
+            print("TP: %g" % TP, "FP: %g" % FP)
+            print("FN: %g" % FN, "TN: %g" % TN)
             print("####")
             #
             # plt.figure(1)
@@ -658,27 +733,43 @@ class PIEIntent(object):
                     l2_dec = torch.cat([x.view(-1) for x in train_model.dec.parameters()])
 
                     loss = loss_fn(outputs, label)
-
-                    # torch.cuda.list_gpu_processes(device=0)
-                    loss += 0.09 * torch.norm(l2_dec, p=2) + \
-                            0.09 * torch.norm(l2_enc, p=2) + \
-                            0.09 * torch.norm(l2_enc_loc, p=2)
-
                     batch_losses.append(loss.data.cpu().numpy())
+                    # torch.cuda.list_gpu_processes(device=0)
+                    loss += 0.01 * torch.norm(l2_dec, p=1) + \
+                            0.001 * torch.norm(l2_enc_loc, p=2) + \
+                            0.05 * torch.norm(l2_enc, p=2)
+                            # 0.001 * torch.norm(l2_enc_loc, p=2)
+
+
                     # val_loss += loss
 
                     y_true.append(np.asarray(label.data.to('cpu')))
                     y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
+                    y_s_pred.append(torch.sigmoid(outputs).data.to('cpu'))
 
-            # scheduler.step(val_loss/count)
+
             y_true = np.concatenate(y_true, axis=0)
             y_pred = np.concatenate(y_pred, axis=0)
+            y_s_pred = np.concatenate(y_s_pred, axis=0)
 
             TN = confusion_matrix(y_true, y_pred)[0, 0]
             FP = confusion_matrix(y_true, y_pred)[0, 1]
             FN = confusion_matrix(y_true, y_pred)[1, 0]
             TP = confusion_matrix(y_true, y_pred)[1, 1]
             accuracy = accuracy_score(y_true, y_pred)
+            f1 = f1_score(y_true, y_pred)
+            precision = precision_score(y_true, y_pred)
+            recall = recall_score(y_true, y_pred)
+            auc = roc_auc_score(y_true, y_s_pred)
+            avg_p = average_precision_score(y_true, y_s_pred)
+
+            save = False
+            if auc >= max_acc:
+                if TN/FP > 0.5:
+                    max_acc = auc
+                    max_TN = TN
+                    max_epochs = epoch+1
+                    save = True
 
             epoch_loss = np.mean(batch_losses)
             epoch_losses_val.append(epoch_loss)
@@ -690,6 +781,12 @@ class PIEIntent(object):
             print('CONFUSION MATRIX:')
             print("TP: %g" % TP, "FP: %g" % FP)
             print("FN: %g" % FN, "TN: %g" % TN)
+
+            print('Precision:', precision)
+            print('Recall:', recall)
+            print('F1 score:', f1)
+            print('ROC AUC:', auc)
+            print('Average Precision:', avg_p)
 
             plt.figure(1)
             plt.plot(epoch_losses_train, "r^")
@@ -716,13 +813,21 @@ class PIEIntent(object):
             plt.grid()
             plt.savefig("%s/epoch_accuracy.png" % model_path.split("model.pth")[0])
             plt.close(2)
-
-            # if accuracy >= best_accuracy:
-            if (epoch+1) % 1 == 0:
-                model_saving_path = model_path.split("model.pth")[0] + "/model_" + "epoch_" + str(epoch+1) + ".pth"
+            print(save)
+            if save is True:
+            # if (epoch+1) % 1 == 0:
+                model_saving_path = model_path.split("model.pth")[0] + "/model_" + "epoch_best.pth"
                 torch.save(train_model.state_dict(), model_saving_path)
 
-        return model_path.split("model.pth")[0]
+        with open(max_path + '.txt', 'wt') as fid:
+            fid.write("Epoch:")
+            fid.write(str(max_epochs))
+            fid.write('\n')
+            fid.write(str(max_TN))
+            fid.write('\n')
+            fid.write(str(max_acc))
+        fid.close()
+        return epoch_accuracy_val, epoch_losses_val
     #############################################################################################
     # Testing code
     #############################################################################################
@@ -742,7 +847,7 @@ class PIEIntent(object):
 
         train_params = configs[1]
         seq_length = configs[2]['max_size_observe']
-        overlap = 1
+        overlap = 0
         tracks, images, bboxes, ped_ids, frame_ids = self.get_tracks(data_test,
                                                           train_params['data_type'],
                                                           seq_length,
@@ -784,8 +889,8 @@ class PIEIntent(object):
         #################################################################################################
         # test_model.load_state_dict(pretrained_dict) # comment this line if you are using above code
 
-        test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_4.pth')))
-        print('epoch-4')
+        test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_14.pth')))
+        print('epoch_14')
         # overlap = 1  # train_params ['overlap']
         # print(test_model.eval())
         def visualisation(seq_len, nodes, img_centre_seq, details):

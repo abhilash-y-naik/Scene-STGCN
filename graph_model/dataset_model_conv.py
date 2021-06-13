@@ -33,13 +33,16 @@ class Dataset(torch.utils.data.Dataset):
         self.unique_bbox = self.dataset['unique_bbox']
         self.unique_image = self.dataset['unique_image']
 
-        self.node_info = {'pedestrian': 2,  # default should be one
+        self.node_info = {'pedestrian': 1,  # default should be one
                           'vehicle': 0,
                           'traffic_light': 1,
                           'sign': 0,
-                          'crosswalk': 1,
+                          'crosswalk': 0,
                           'transit_station': 0,
                           'ego_vehicle': 0}
+
+        self.structure = 'star'  # 'fully_connected'
+        # self.structure = 'fully_connected'  #
 
         # if self.node_info['ego_vehicle']:
         #     self.ego_vehicle_node = 1
@@ -56,6 +59,7 @@ class Dataset(torch.utils.data.Dataset):
         self.num_examples = len(self.track['ped_ids'])
 
         print(self.num_examples)
+        print('Loading %s topology...' % str(self.structure))
         save_path = self.get_path(type_save='data',
                                   data_type='features' + '_' + self.data_opts[
                                       'crop_type'] + '_' + self.data_opts[
@@ -419,7 +423,7 @@ class Dataset(torch.utils.data.Dataset):
 
         graph, adj_matrix, adj_matrix_loc, decoder_input, ped_pose = self.load_images_and_process(index)
 
-        if index % 2000 == 0:
+        if index % 1000 == 0:
             print(decoder_input[0])
             print(self.decoder_input[index][0])
 
@@ -590,19 +594,32 @@ class Dataset(torch.utils.data.Dataset):
                 decoder_input[s, h, :] = bbox_location[h]
 
                 # decoder_input[s, h, :] = bbox_location[h]
-                adj_matrix[h, h] = 1
+                adj_matrix[s, h, h] = 1
                 adj_matrix_loc[s, h, h] = 1
 
-                if h > 0:
-                    # adj_matrix[s, h, h] = 2
-                    img_cp_s = img_centre_seq[s][h]
-                    l2_norm = self.anorm(img_cp_p, img_cp_s)
-                    adj_matrix[h, 0] = 1
-                    adj_matrix[0, h] = 1
-                    adj_matrix_loc[h, 0] = l2_norm  # l2_norm
-                    adj_matrix_loc[0, h] = l2_norm  # l2_norm
-                    # adj_matrix_spatial[s, h, 0] = 1
-                    # adj_matrix_spatial[s, 0, h] = 1
+                if self.structure != 'star' and self.structure != 'fully_connected':
+                    print('Model excepts only "star" or "fully_connected" topology')
+                    exit()
+
+                if self.structure == 'star' and h > 0:
+
+                        img_cp_s = img_centre_seq[s][h]
+                        l2_norm = self.anorm(img_cp_p, img_cp_s)
+                        adj_matrix[s, h, 0] = 1
+                        adj_matrix[s, 0, h] = 1
+                        adj_matrix_loc[s, h, 0] = 1  # l2_norm
+                        adj_matrix_loc[s, 0, h] = 1  # l2_norm
+
+                elif self.structure == 'fully_connected':
+                    # For fully connected
+                    for k in range(h+1, len(step)):
+
+                        l2_norm = self.anorm(img_centre_seq[s][h], img_centre_seq[s][k])
+                        adj_matrix[s, h, k] = 1
+                        adj_matrix[s, k, h] = 1
+                        adj_matrix_loc[s, h, k] = 1 # l2_norm
+                        adj_matrix_loc[s, k, h] = 1  # l2_norm
+
 
             # g = nx.from_numpy_matrix(adj_matrix[s, :, :])
             # adj_matrix[s, :, :] = self.normalized_laplacian_matrix(g).toarray()

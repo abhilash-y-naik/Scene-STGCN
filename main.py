@@ -1,7 +1,7 @@
 import time
 import os
 import pickle
-
+import matplotlib.pyplot as plt
 from prettytable import PrettyTable
 
 
@@ -90,7 +90,7 @@ def train_intent(train_test, model, data_path):
 
         t = PIEIntent()
 
-        pretrained_model_path = 'data/graph/intention/26May2021-07h16m14s'
+        pretrained_model_path = 'data/graph/intention/12Jun2021-16h38m21s'
         # pretrained_model_path = 'graph_model/pretrained weight'
         if train_test < 2:  # Train
 
@@ -121,10 +121,11 @@ def train_intent(train_test, model, data_path):
                         beh_seq_val = pickle.load(fid, encoding='bytes')
             else:
                 beh_seq_val = imdb.generate_data_trajectory_sequence('test', **data_opts)
-                # beh_seq_val = imdb.balance_samples_count(beh_seq_val, label_type='intention_binary')
+
                 with open(data_save_path, 'wb') as fid:
                     pickle.dump(beh_seq_val, fid, pickle.HIGHEST_PROTOCOL)
 
+            # beh_seq_val = imdb.balance_samples_count(beh_seq_val, label_type='intention_binary')
             # data_save_path = os.path.join('./PIE_dataset' + '/data_cache/graph/' + 'beh_seq_test' + '.pkl')
             # if os.path.exists(data_save_path) and not regen_pkl:
             #     with open(data_save_path, 'rb') as fid:
@@ -138,12 +139,54 @@ def train_intent(train_test, model, data_path):
             #     with open(data_save_path, 'wb') as fid:
             #         pickle.dump(beh_seq_val, fid, pickle.HIGHEST_PROTOCOL)
 
-            saved_files_path = t.train(data_train=beh_seq_train,
-                                       data_val=beh_seq_val,
-                                       data_test='',
-                                       epochs=100,
-                                       batch_size=128,
-                                       data_opts=data_opts)
+            saved = t.train(data_train=beh_seq_train,
+                                           data_val=beh_seq_val,
+                                           data_test='',
+                                           epochs=30,
+                                           batch_size=128,
+                                           data_opts=data_opts)
+                                           # layers = 3,
+                                           # datasize = datasize[num])
+
+
+            # datasize = [250, 500, 1000, 1500, 2000, 2500]
+            # for num in range(len(datasize)):
+                # accuracy = []
+                # loss = []
+                # for i in range(5):
+                #     saved = t.train(data_train=beh_seq_train,
+                #                                data_val=beh_seq_val,
+                #                                data_test='',
+                #                                epochs=50,
+                #                                batch_size=128,
+                #                                data_opts=data_opts,
+                #                                layers =i,
+                #                                datasize = datasize[num])
+                #     accuracy.append(saved[0])
+                #     loss.append(saved[1])
+
+                # color = ['r', 'b', 'g', 'k', 'y']
+                # plt.figure(1)
+                # for i in range(len(accuracy)):
+                #     plt.plot(accuracy[i], color[i], label=str(i+1)+'layer')
+                # plt.ylabel("accuracy")
+                # plt.xlabel("epoch")
+                # plt.title("Accuracy per epoch for different GCN layers (Dataset = {} samples)".format(str(2*datasize[num])))
+                # plt.legend()
+                # plt.grid()
+                # plt.savefig("./epoch_accuracy_"+str(2*datasize[num])+".png")
+                # plt.close(1)
+                #
+                # plt.figure(2)
+                # for i in range(len(loss)):
+                #     plt.plot(loss[i], color[i], label=str(i+1)+'layer')
+                # plt.ylabel("loss")
+                # plt.xlabel("epoch")
+                # plt.title("Loss per epoch for different GCN layers (Dataset = {} samples)".format(str(2*datasize[num])))
+                # plt.legend()
+                # plt.grid()
+                # plt.savefig("./epoch_loss_"+str(2*datasize[num])+".png")
+                # plt.close(2)
 
         if train_test > 0:  # Test
             if saved_files_path == '':

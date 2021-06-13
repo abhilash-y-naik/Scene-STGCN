@@ -10,7 +10,19 @@
 #
 # print(len(pose_set['video_0001']['14019_1_1_18']))
 # print(len(np.zeros((36))))
-# exit()
+import numpy as np
+# def x():
+#     print(1)
+#     return np.ones((5,1)), np.zeros((2,1))
+# acc = []
+# val = []
+# for i in range(1,3):
+#     print(i)
+
+print(5/3.2)
+# print(acc)
+# print(val)
+exit()
 
 
 import numpy as np

@@ -3,7 +3,7 @@ import math
 import sys
 
 import torch
-import torchlight
+# import torchlight
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
@@ -44,6 +44,7 @@ class ConvTemporalGraphical(nn.Module):
     def __init__(self,
                  in_channels,
                  out_channels,
+                 dropout_conv,
                  kernel_size,
                  t_kernel_size=1,
                  t_stride=1,
@@ -60,10 +61,11 @@ class ConvTemporalGraphical(nn.Module):
             stride=(t_stride, 1),
             dilation=(t_dilation, 1),
             bias=bias)
+        self.drop = nn.Dropout(dropout_conv, inplace=True)
 
     def forward(self, x, A):
         assert A.size(1) == self.kernel_size
-        x = self.conv(x)
+        x = self.drop(self.conv(x))
         x = torch.einsum('nctv,ntvw->nctw', (x, A))
 
         return x.contiguous(), A
@@ -96,7 +98,8 @@ class st_gcn(nn.Module):
                  kernel_size,
                  use_mdn=False,
                  stride=1,
-                 dropout=0,
+                 dropout_tcn=0,
+                 dropout_conv=0,
                  residual=True):
         super(st_gcn, self).__init__()
 
@@ -107,21 +110,21 @@ class st_gcn(nn.Module):
         padding = ((kernel_size[0] - 1) // 2, 0)
         self.use_mdn = use_mdn
 
-        self.gcn = ConvTemporalGraphical(in_channels, out_channels,
+        self.gcn = ConvTemporalGraphical(in_channels, out_channels, dropout_conv,
                                          kernel_size[1])
 
         self.tcn = nn.Sequential(
             nn.BatchNorm2d(out_channels),
             nn.PReLU(),
+            nn.ReplicationPad2d((0, 0, 2*((kernel_size[0] - 1) // 2), 0)),
             nn.Conv2d(
                 out_channels,
                 out_channels,
                 (kernel_size[0], 1),
                 (stride, 1),
-                padding,
             ),
             nn.BatchNorm2d(out_channels),
-            nn.Dropout(dropout, inplace=True),
+            nn.Dropout(dropout_tcn, inplace=True),
         )
 
         if not residual:
@@ -146,7 +149,6 @@ class st_gcn(nn.Module):
 
         res = self.residual(x)
         x, A = self.gcn(x, A)
-
         x = self.tcn(x) + res
 
         if not self.use_mdn:
@@ -157,37 +159,42 @@ class st_gcn(nn.Module):
 
 class social_stgcnn(nn.Module):
     def __init__(self,
-                    max_nodes, node_info = ''):
+                    max_nodes, seed = '', node_info = '', layers=3):
         super(social_stgcnn, self).__init__()
         seq_len = 15
         kernel_size = 3
         self.edge_importance_weighting = True
 
-        self.st_gcn_networks = nn.ModuleList((
-            st_gcn(512*7*7, 64, (kernel_size, seq_len), 1, residual=False, dropout=0.5),
-            # st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
+        self.st_gcn_networks = nn.ModuleList()
+        self.st_gcn_networks.append(
+            st_gcn(512, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0.5))
+        for i in range(1, layers):
+            self.st_gcn_networks.append(st_gcn(64, 64, (kernel_size, seq_len), 1,
+                                               residual=False, dropout_tcn=0.5, dropout_conv=0.2))
 
-        ))
-        self.st_gcn_networks_loc = nn.ModuleList((
-            st_gcn(4, 64, (kernel_size, seq_len), 1, residual=False, dropout=0.5),
-            # st_gcn(64, 64, (kernel_size, seq_len), 1, dropout=0.5),
-
-        ))
+        self.st_gcn_networks_loc = nn.ModuleList()
+        self.st_gcn_networks_loc.append(
+            st_gcn(4, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0))
+        for i in range(1, 1):
+            self.st_gcn_networks_loc.append(st_gcn(64, 64, (kernel_size, seq_len), 1,
+                                               residual=False, dropout_tcn=0.5, dropout_conv=0.2))
 
         # Action Recognition Module
-        self.st_gcn_networks_p = Model(3, 400, graph_args = {'layout': 'openpose',
-                      'strategy': 'spatial'}, edge_importance_weighting=True)
+        # self.st_gcn_networks_p = Model(3, 400, graph_args = {'layout': 'openpose',
+        #               'strategy': 'spatial'}, edge_importance_weighting=True)
 
-        pretrained_dict = torch.load('U:/thesis_code/pretrained_models/st_gcn.kinetics.pt')
-        self.st_gcn_networks_p.load_state_dict(pretrained_dict)
-        self.st_gcn_networks_pose_bn = list(self.st_gcn_networks_p.children())[0]
-        self.st_gcn_networks_pose = nn.Sequential(*list(self.st_gcn_networks_p.children())[1:-2][0])
-        self.edge_importance_pose = list(self.st_gcn_networks_p.children())[-2:-1][0]
-
-        self.seed = 12
+        # pretrained_dict = torch.load('./pretrained_models/st_gcn.kinetics.pt')
+        # self.st_gcn_networks_p.load_state_dict(pretrained_dict)
+        # self.st_gcn_networks_pose_bn = list(self.st_gcn_networks_p.children())[0]
+        # self.st_gcn_networks_pose = nn.Sequential(*list(self.st_gcn_networks_p.children())[1:-2][0])
+        # self.edge_importance_pose = list(self.st_gcn_networks_p.children())[-2:-1][0]
+        # self.conv = nn.Conv1d(4, 16, kernel_size=1)
         self.max_nodes = max_nodes
-        torch.manual_seed(self.seed)
-        torch.cuda.manual_seed(self.seed)
+        self.seed = seed
+
+        # torch.manual_seed(self.seed)
+        # torch.cuda.manual_seed(self.seed)
+        # torch.cuda.manual_seed_all(self.seed)
         # initialize parameters for edge importance weighting
         if self.edge_importance_weighting:
             self.edge_importance = nn.ParameterList([
@@ -203,60 +210,75 @@ class social_stgcnn(nn.Module):
             self.edge_importance = [1] * len(self.st_gcn_networks)
             self.edge_importance_loc = [1] * len(self.st_gcn_networks_loc)
 
-        # self.bn = nn.BatchNorm1d(128)
-        self.pose_flat = nn.Flatten()
-        self.dec = nn.LSTM(384, 128, num_layers=1, bias=True,
-                           batch_first=True, bidirectional=False)
+        self.bn = nn.BatchNorm1d(512*max_nodes)
+        self.bn_loc = nn.BatchNorm1d(4*max_nodes)
 
+        self.dec = nn.LSTM(64+64, 128, num_layers=1, bias=True,
+                           batch_first=True, bidirectional=False)
         nn.init.xavier_normal_(self.dec.weight_hh_l0)
         self.dropout_dec = nn.Dropout(p=0.4)
 
         self.fcn = nn.Linear(128, 1)
+        # self.dropout_class = nn.Dropout(p=0.1)
         nn.init.xavier_normal_(self.fcn.weight)
 
     def forward(self, v, a, a_loc, loc, pose_feature):
 
         b, t, n, c, h, w = v.size()
+        v = v.view(b*t*n, c, h, w)
+        v = F.avg_pool2d(v, v.size()[2:])
+        _, c_pool, w_pool, h_pool = v.size()
+        v = v.view(b, t, n, c_pool, w_pool, h_pool)
         v = v.permute(0, 3, 4, 5, 1, 2).contiguous()
-        v = v.view(b, c*h*w, t, n)
-        loc = loc.permute(0, 3, 1, 2).contiguous()
+        v = v.view(b, c_pool * w_pool * h_pool, t, n)
+
+        # Batch normalisation
+        v = v.permute(0, 3, 1, 2).contiguous()
+        v = v.view(b, n*c_pool * w_pool * h_pool, t)
+        v = self.bn(v)
+        v = v.view(b, n, c_pool * w_pool * h_pool, t)
+        v = v.permute(0, 2, 3, 1).contiguous()
+
+        b_loc, t_loc, n_loc, c_loc = loc.size()
+        loc = loc.permute(0, 2, 3, 1).contiguous()
+        loc = self.bn_loc(loc.view(b_loc, n_loc*c_loc, t_loc))
+        loc = loc.view(b_loc, n_loc, c_loc, t_loc)
+        loc = loc.permute(0, 2, 3, 1).contiguous()
 
         for graph, imp in zip(self.st_gcn_networks, self.edge_importance):
             v, _ = graph(v, a*imp)
 
-        for graph, imp_loc in zip(self.st_gcn_networks_loc, self.edge_importance):
+        for graph, imp_loc in zip(self.st_gcn_networks_loc, self.edge_importance_loc):
             loc, _ = graph(loc, a_loc*imp_loc)
 
-        ###############################################################################################
-        # Pose Module
-        pose_feature = pose_feature.permute(0, 3, 1, 2).contiguous()
-        N, C, T, V = pose_feature.size()
-        pose_feature = pose_feature.permute(0, 3, 1, 2).contiguous()
-        pose_feature = pose_feature.view(N, V * C, T)
-        pose_feature = self.st_gcn_networks_pose_bn(pose_feature)
-        pose_feature = pose_feature.view(N, V, C, T)
-        pose_feature = pose_feature.permute(0, 2, 3, 1).contiguous()
-        pose_feature = pose_feature.view(N, C, T, V)
-
-        for graph, imp_pose in zip(self.st_gcn_networks_pose, self.edge_importance_pose):
-            pose_feature, _ = graph(pose_feature, self.st_gcn_networks_p.A*imp_pose)
-        # pose = self.st_gcn_networks_pose(pose_feature)
-        pose_feature = F.avg_pool2d(pose_feature, pose_feature.size()[2:])
-        pose_feature = self.pose_flat(pose_feature)
-        pose_feature = pose_feature.repeat(1, T).reshape(N, T, -1)
-        pose_feature = pose_feature.permute(0, 2, 1).contiguous()
+        # # ###############################################################################################
+        # # # Pose Module
+        # pose_feature = pose_feature.permute(0, 3, 1, 2).contiguous()
+        # N, C, T, V = pose_feature.size()
+        # pose_feature = pose_feature.permute(0, 3, 1, 2).contiguous()
+        # pose_feature = pose_feature.view(N, V * C, T)
+        # pose_feature = self.st_gcn_networks_pose_bn(pose_feature)
+        # pose_feature = pose_feature.view(N, V, C, T)
+        # pose_feature = pose_feature.permute(0, 2, 3, 1).contiguous()
+        # pose_feature = pose_feature.view(N, C, T, V)
+        #
+        # for graph, imp_pose in zip(self.st_gcn_networks_pose, self.edge_importance_pose):
+        #     pose_feature, _ = graph(pose_feature, self.st_gcn_networks_p.A*imp_pose)
+        #
+        # pose_feature = F.avg_pool2d(pose_feature, pose_feature.size()[2:])
+        # pose_feature = self.pose_flat(pose_feature)
+        # pose_feature = pose_feature.repeat(1, T).reshape(N, T, -1)
+        # pose_feature = pose_feature.permute(0, 2, 1).contiguous()
         ##############################################################################################
 
         v = v[:, :, :, 0]
 
         loc = loc[:, :, :, 0]
+        # x = self.conv(x) # Basic Model to have fair comparision: nn.Conv1d(4, 16, kernel_size=1)
 
-        x = torch.cat((v, loc, pose_feature), dim=1)
+        x = torch.cat((v, loc), dim=1)
+
         x = x.permute(0, 2, 1).contiguous()
-
-        # x = self.bn(x.permute(0, 2, 1).contiguous())
-        # x = x.permute(0, 2, 1).contiguous()
-
         x, _ = self.dec(x)
         x = torch.tanh(self.dropout_dec(x))
 
