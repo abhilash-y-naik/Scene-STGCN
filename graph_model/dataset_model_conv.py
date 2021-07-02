@@ -36,9 +36,9 @@ class Dataset(torch.utils.data.Dataset):
         self.node_info = {'pedestrian': 1,  # default should be one
                           'vehicle': 0,
                           'traffic_light': 1,
-                          'sign': 0,
-                          'crosswalk': 0,
                           'transit_station': 0,
+                          'sign': 0,
+                          'crosswalk': 1,
                           'ego_vehicle': 0}
 
         self.structure = 'star'  # 'fully_connected'
@@ -66,13 +66,13 @@ class Dataset(torch.utils.data.Dataset):
                                                 'crop_mode'],  # images
                                   model_name='vgg16_bn',
                                   data_subset=self.data_type, ind=1)
-        pose_set = {}
-        for i in range(6):
-            with open(os.path.join('./poses/pose_set0' + str(i+1) + '.pkl'), 'rb') as fid:
-                try:
-                    pose_set['set0'+ str(str(i+1))] = pickle.load(fid)
-                except:
-                    pose_set['set0'+ str(str(i+1))] = pickle.load(fid, encoding='bytes')
+        # pose_set = {}
+        # for i in range(6):
+        #     with open(os.path.join('./poses/pose_set0' + str(i+1) + '.pkl'), 'rb') as fid:
+        #         try:
+        #             pose_set['set0'+ str(str(i+1))] = pickle.load(fid)
+        #         except:
+        #             pose_set['set0'+ str(str(i+1))] = pickle.load(fid, encoding='bytes')
 
         variable = False
         if variable:
@@ -91,11 +91,20 @@ class Dataset(torch.utils.data.Dataset):
         self.regen_pkl = regen_pkl
         count_positive_samples = 0
         count_ped = []
-        count_veh = []
-        count_sign = []
-        count_traflig = []
-        count_transit = []
+        count_veh=[]
+        count_sign=[]
+        count_traflig=[]
+        count_transit=[]
         count_cross = []
+
+        count_object_samples = {'pedestrian': 0,  # default should be one
+                     'vehicle': 0,
+                     'traffic_light': 0,
+                     'transit_station': 0,
+                     'sign': 0,
+                     'crosswalk': 0,
+                     'ego_vehicle': 0}
+
         pose_donotexit = 0
         if self.regen_pkl:
             i = -1
@@ -120,8 +129,8 @@ class Dataset(torch.utils.data.Dataset):
                     set_id = imp.split('/')[-3]
                     vid_id = imp.split('/')[-2]
                     img_name = imp.split('/')[-1].split('.')[0]
-                    pose_s = pose_set[str(set_id)]
-                    pose_vid = pose_s[str(vid_id)]
+                    # pose_s = pose_set[str(set_id)]
+                    # pose_vid = pose_s[str(vid_id)]
 
                     key = str(set_id + vid_id)
                     frames = self.unique_frames[key].tolist()
@@ -181,11 +190,11 @@ class Dataset(torch.utils.data.Dataset):
                                     img_centre_unsorted[object_keys].append(self.get_center(bb))
                                     bbox_location_unsorted[object_keys].append(bb)
                                     key = os.path.join( im_name + '_' + n[0])
-                                    if str(key) in pose_vid.keys():
-                                        primary_pedestrian_pose.append(pose_vid[str(key)])
-                                    else:
-                                        primary_pedestrian_pose.append(np.zeros((36)))
-                                        pose_donotexit += 1
+                                    # if str(key) in pose_vid.keys():
+                                    #     primary_pedestrian_pose.append(pose_vid[str(key)])
+                                    # else:
+                                    #     primary_pedestrian_pose.append(np.zeros((36)))
+                                    #     pose_donotexit += 1
 
                         for idx, (n, bb, im) in enumerate(
                                 zip(ped[index][object_keys], box[index][object_keys], image[index][object_keys])):
@@ -260,34 +269,50 @@ class Dataset(torch.utils.data.Dataset):
                 bbox_location_all_node = []
                 img_centre_all_node = []
 
+                count_dict = {'pedestrian': False,  # default should be one
+                                  'vehicle': False,
+                                  'traffic_light': False,
+                                  'transit_station': False,
+                                  'sign': False,
+                                  'crosswalk': False,
+                                  'ego_vehicle': False}
+
                 for s in range(self.seq_len):
 
                     all_node_features = []
                     bbox_location_seq_all_node = []
                     img_centre_seq_all_node = []
-                    # print(node_features[0].keys())
+                    # print(node_features[0])
                     for k in node_features[0]:
                         if k == 'pedestrian':
                             count_ped.append(len(node_features[s][k]))
+
                             for num, saving_nodes in enumerate(zip(node_features[s][k],
                                                                    bbox_location_seq[s][k],
                                                                    img_centre_seq[s][k])):
 
                                 if num < self.node_info['pedestrian']:
+                                    count_dict[k] = True
                                     all_node_features.append(saving_nodes[0])
                                     bbox_location_seq_all_node.append(saving_nodes[1])
                                     img_centre_seq_all_node.append(saving_nodes[2])
+                                elif len(node_features[s][k]) < self.node_info['pedestrian']:
+                                    all_node_features.append(0)
 
                         if k == 'vehicle':
                             count_veh.append(len(node_features[s][k]))
+
                             for num, saving_nodes in enumerate(zip(node_features[s][k],
                                                                    bbox_location_seq[s][k],
                                                                    img_centre_seq[s][k])):
 
                                 if num < self.node_info['vehicle']:
+                                    count_dict[k] = True
                                     all_node_features.append(saving_nodes[0])
                                     bbox_location_seq_all_node.append(saving_nodes[1])
                                     img_centre_seq_all_node.append(saving_nodes[2])
+                                elif len(node_features[s][k]) < self.node_info['vehicle']:
+                                    all_node_features.append(0)
 
                         if k == 'traffic_light':
                             count_traflig.append(len(node_features[s][k]))
@@ -296,9 +321,12 @@ class Dataset(torch.utils.data.Dataset):
                                                                    img_centre_seq[s][k])):
 
                                 if num < self.node_info['traffic_light']:
+                                    count_dict[k] = True
                                     all_node_features.append(saving_nodes[0])
                                     bbox_location_seq_all_node.append(saving_nodes[1])
                                     img_centre_seq_all_node.append(saving_nodes[2])
+                                elif len(node_features[s][k]) < self.node_info['traffic_light']:
+                                    all_node_features.append(0)
 
                         if k == 'transit_station':
                             count_transit.append(len(node_features[s][k]))
@@ -307,9 +335,12 @@ class Dataset(torch.utils.data.Dataset):
                                                                    img_centre_seq[s][k])):
 
                                 if num < self.node_info['transit_station']:
+                                    count_dict[k] = True
                                     all_node_features.append(saving_nodes[0])
                                     bbox_location_seq_all_node.append(saving_nodes[1])
                                     img_centre_seq_all_node.append(saving_nodes[2])
+                                elif len(node_features[s][k]) < self.node_info['transit_station']:
+                                    all_node_features.append(0)
 
                         if k == 'sign':
                             count_sign.append(len(node_features[s][k]))
@@ -318,9 +349,12 @@ class Dataset(torch.utils.data.Dataset):
                                                                    img_centre_seq[s][k])):
 
                                 if num < self.node_info['sign']:
+                                    count_dict[k] = True
                                     all_node_features.append(saving_nodes[0])
                                     bbox_location_seq_all_node.append(saving_nodes[1])
                                     img_centre_seq_all_node.append(saving_nodes[2])
+                                elif len(node_features[s][k]) < self.node_info['sign']:
+                                    all_node_features.append(0)
 
                         if k == 'crosswalk':
                             count_cross.append(len(node_features[s][k]))
@@ -329,9 +363,12 @@ class Dataset(torch.utils.data.Dataset):
                                                                    img_centre_seq[s][k])):
 
                                 if num < self.node_info['crosswalk']:
+                                    count_dict[k] = True
                                     all_node_features.append(saving_nodes[0])
                                     bbox_location_seq_all_node.append(saving_nodes[1])
                                     img_centre_seq_all_node.append(saving_nodes[2])
+                                elif len(node_features[s][k]) < self.node_info['crosswalk']:
+                                    all_node_features.append(0)
 
                         if k == 'ego_vehicle':
                             for num, saving_nodes in enumerate(zip(node_features[s][k],
@@ -339,6 +376,7 @@ class Dataset(torch.utils.data.Dataset):
                                                                    img_centre_seq[s][k])):
 
                                 if num < self.node_info['ego_vehicle']:
+                                    count_dict[k] = True
                                     all_node_features.append(saving_nodes[0])
                                     bbox_location_seq_all_node.append(saving_nodes[1])
                                     img_centre_seq_all_node.append(saving_nodes[2])
@@ -347,16 +385,26 @@ class Dataset(torch.utils.data.Dataset):
                     bbox_location_all_node.append(bbox_location_seq_all_node)
                     img_centre_all_node.append(img_centre_seq_all_node)
 
+                for k in count_dict.keys():
+                    if count_dict[k] == True:
+                        # if self.track['output'][i][0] == 1:
+                            count_object_samples[k] += 1
+
+
+
                 self.feature_save_folder = './data/nodes_and_features/' + str(self.data_type)
                 self.feature_save_path = os.path.join(self.feature_save_folder, str(i) + '.pkl')
                 if not os.path.exists(self.feature_save_folder):
                     os.makedirs(self.feature_save_folder)
                 with open(self.feature_save_path, 'wb') as fid:
-                    pickle.dump((img_centre_all_node, all_node_features_seq, bbox_location_all_node, primary_pedestrian_pose), fid,
+                    pickle.dump((img_centre_all_node, all_node_features_seq, bbox_location_all_node), fid,
                                 pickle.HIGHEST_PROTOCOL)
-        print('Number of Pose desnot exists:', pose_donotexit)
+
+        # print('Number of Pose doesnot exists:', pose_donotexit)
         # print('\nNumber of Positive samples(Crossing):', count_positive_samples)
         # print('Number of Negative samples(Non-crossing):', self.num_examples-count_positive_samples )
+
+
         # name = count_cross
         # self.ped_data = np.zeros(np.max(name)+1)
         # for i in range(np.max(name)+1):
@@ -365,6 +413,10 @@ class Dataset(torch.utils.data.Dataset):
         #             self.ped_data[i] = self.ped_data[i]+1
         #
         # self.ped_data = self.ped_data/len(name)*100
+        #
+        # print(count_object_samples)
+        # exit()
+
         #
         # print('\nTotal frames:', len(count_ped))
         # print('\nAvg number of Pedestrian:', np.mean(count_ped))
@@ -421,7 +473,7 @@ class Dataset(torch.utils.data.Dataset):
         #                                                                  model_name='vgg16_bn',
         #                                                                  data_subset=self.data_type))
 
-        graph, adj_matrix, adj_matrix_loc, decoder_input, ped_pose = self.load_images_and_process(index)
+        graph, adj_matrix, decoder_input, node_label = self.load_images_and_process(index)
 
         if index % 1000 == 0:
             print(decoder_input[0])
@@ -429,10 +481,11 @@ class Dataset(torch.utils.data.Dataset):
 
         train_data = torch.from_numpy(graph), \
                      torch.from_numpy(adj_matrix), \
-                     torch.from_numpy(adj_matrix_loc), \
                      torch.from_numpy(decoder_input), \
-                     torch.from_numpy(ped_pose.astype(np.float64)), \
-                     torch.from_numpy(self.track['output'][index][0])
+                     torch.from_numpy(self.track['output'][index][0]), \
+                     torch.from_numpy(node_label)
+                     # torch.from_numpy(ped_pose.astype(np.float64)), \
+
         return train_data
 
     def anorm(self, p1, p2):
@@ -554,15 +607,26 @@ class Dataset(torch.utils.data.Dataset):
 
         return DAD
 
+    # def node_normalise(self, G):
+    #     # print(G.shape)
+    #     # exit()
+    #     # mean = G.mean(dim = 0, keepdim = True)
+    #     # var = G.std(dim = 0, keepdim = True)
+    #     # Graph = (G - mean) / (var + 1e-5)
+    #     Graph = (G-np.mean(G, axis=0))/(np.std(G, axis=0)+1e-5)
+    #     # print(Graph)
+    #     # exit()
+    #     return Graph
+
     def load_images_and_process(self,
                                 index,
                                 visualise=False):
 
         with open(os.path.join(self.feature_save_folder, str(index) + '.pkl'), 'rb') as fid:
             try:
-                img_centre_seq, node_features, bbox_location_seq, ped_pose = pickle.load(fid)
+                img_centre_seq, node_features, bbox_location_seq = pickle.load(fid)
             except:
-                img_centre_seq, node_features, bbox_location_seq, ped_pose = pickle.load(fid, encoding='bytes')
+                img_centre_seq, node_features, bbox_location_seq = pickle.load(fid, encoding='bytes')
 
         max_nodes = self.max_nodes
 
@@ -570,68 +634,74 @@ class Dataset(torch.utils.data.Dataset):
         # decoder_input = np.zeros((self.seq_len, len(bbox_location_seq[0][0])))
         graph = np.zeros((self.seq_len, max_nodes, 512, 7, 7))
         adj_matrix = np.zeros((self.seq_len, max_nodes, max_nodes))
-        adj_matrix_loc = np.zeros((self.seq_len, max_nodes, max_nodes))
+        # adj_matrix_loc = np.zeros((self.seq_len, max_nodes, max_nodes))
         # adj_matrix = np.zeros((max_nodes, max_nodes))
-        pose = np.zeros((self.seq_len, 18, 3))
+        # pose = np.zeros((self.seq_len, 18, 3))
+        node_label = np.zeros((self.seq_len, max_nodes, 1))
         for s in range(self.seq_len):
 
             step = node_features[s]
             bbox_location = bbox_location_seq[s]
-            pose[s, :, 0:2] = np.asarray(ped_pose[s]).reshape(18, 2)
-            pose[s, :, -1] = 0.5
+            # pose[s, :, 0:2] = np.asarray(ped_pose[s]).reshape(18, 2)
+            # pose[s, :, -1] = 0.5
 
-            img_cp_p = img_centre_seq[s][0]
+            # img_cp_p = img_centre_seq[s][0]
             for h, stp in enumerate(step):
-                with open(str(stp[0]), 'rb') as fid:
-                    try:
-                        img_features = pickle.load(fid)
+                if stp != 0:
+                    with open(str(stp[0]), 'rb') as fid:
+                        try:
+                            img_features = pickle.load(fid)
 
-                    except:
-                        img_features = pickle.load(fid, encoding='bytes')
+                        except:
+                            img_features = pickle.load(fid, encoding='bytes')
+                    node_label[s, h, :] = h
+                    img_features = np.squeeze(img_features)
+                    graph[s, h, :] = img_features
+                    decoder_input[s, h, :] = bbox_location[h]
 
-                img_features = np.squeeze(img_features)
-                graph[s, h, :] = img_features
-                decoder_input[s, h, :] = bbox_location[h]
+                    # decoder_input[s, h, :] = bbox_location[h]
 
-                # decoder_input[s, h, :] = bbox_location[h]
-                adj_matrix[s, h, h] = 1
-                adj_matrix_loc[s, h, h] = 1
+                    adj_matrix[s, h, h] = 1
 
-                if self.structure != 'star' and self.structure != 'fully_connected':
-                    print('Model excepts only "star" or "fully_connected" topology')
-                    exit()
+                    # adj_matrix_loc[s, h, h] = 1
 
-                if self.structure == 'star' and h > 0:
+                    if self.structure != 'star' and self.structure != 'fully_connected':
+                        print('Model excepts only "star" or "fully_connected" topology')
+                        exit()
 
-                        img_cp_s = img_centre_seq[s][h]
-                        l2_norm = self.anorm(img_cp_p, img_cp_s)
-                        adj_matrix[s, h, 0] = 1
-                        adj_matrix[s, 0, h] = 1
-                        adj_matrix_loc[s, h, 0] = 1  # l2_norm
-                        adj_matrix_loc[s, 0, h] = 1  # l2_norm
+                    if self.structure == 'star' and h > 0:
 
-                elif self.structure == 'fully_connected':
-                    # For fully connected
-                    for k in range(h+1, len(step)):
+                            # img_cp_s = img_centre_seq[s][h]
+                            # l2_norm = self.anorm(img_cp_p, img_cp_s)
+                            adj_matrix[s, h, 0] = 1
+                            adj_matrix[s, 0, h] = 1
+                            # adj_matrix_loc[s, h, 0] = 1  # l2_norm
+                            # adj_matrix_loc[s, 0, h] = 1  # l2_norm
 
-                        l2_norm = self.anorm(img_centre_seq[s][h], img_centre_seq[s][k])
-                        adj_matrix[s, h, k] = 1
-                        adj_matrix[s, k, h] = 1
-                        adj_matrix_loc[s, h, k] = 1 # l2_norm
-                        adj_matrix_loc[s, k, h] = 1  # l2_norm
+                    elif self.structure == 'fully_connected':
+                        # For fully connected
+                        for k in range(h+1, len(step)):
+
+                            # l2_norm = self.anorm(img_centre_seq[s][h], img_centre_seq[s][k])
+                            adj_matrix[s, h, k] = 1
+                            adj_matrix[s, k, h] = 1
+                            # adj_matrix_loc[s, h, k] = 1 # l2_norm
+                            # adj_matrix_loc[s, k, h] = 1  # l2_norm
 
 
             # g = nx.from_numpy_matrix(adj_matrix[s, :, :])
             # adj_matrix[s, :, :] = self.normalized_laplacian_matrix(g).toarray()
+            # graph[s, :, :] = self.node_normalise(graph[s, :, :])
+            # decoder_input[s, :, :] = self.node_normalise(decoder_input[s, :, :])
             adj_matrix[s, :, :] = self.normalize_undigraph(adj_matrix[s, :, :])
-            adj_matrix_loc[s, :, :] = self.normalize_undigraph(adj_matrix_loc[s, :, :])
+            # adj_matrix_loc[s, :, :] = self.normalize_undigraph(adj_matrix_loc[s, :, :])
             # print(adj_matrix[s,:,:])
             # adj_matrix_spatial[s, :, :] = self.normalize_undigraph(adj_matrix_spatial[s, :, :])
         # print(adj_matrix)
         if visualise:
             self.visualisation(self.seq_len, node_features, img_centre_seq)
 
-        return graph, adj_matrix, adj_matrix_loc, decoder_input, pose
+        return graph, adj_matrix, decoder_input, node_label
 
     def __len__(self):
         return self.num_examples

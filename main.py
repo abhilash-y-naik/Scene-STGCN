@@ -90,7 +90,7 @@ def train_intent(train_test, model, data_path):
 
         t = PIEIntent()
 
-        pretrained_model_path = 'data/graph/intention/12Jun2021-16h38m21s'
+        pretrained_model_path = 'data/graph/intention/1ped_1crosswalk/13Jun2021-18h07m15s'
         # pretrained_model_path = 'graph_model/pretrained weight'
         if train_test < 2:  # Train
 
@@ -142,7 +142,7 @@ def train_intent(train_test, model, data_path):
             saved = t.train(data_train=beh_seq_train,
                                            data_val=beh_seq_val,
                                            data_test='',
-                                           epochs=30,
+                                           epochs=50,
                                            batch_size=128,
                                            data_opts=data_opts)
                                            # layers = 3,

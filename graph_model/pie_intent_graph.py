@@ -331,7 +331,7 @@ class PIEIntent(object):
               batch_size=128,
               epochs=400,
               optimizer_type='sgd',
-              optimizer_params={'lr': 0.0007, 'clipvalue': 0.0, 'decay': 0},
+              optimizer_params={'lr': 0.001, 'clipvalue': 0.0, 'decay': 0},
               loss=['binary_crossentropy'],
               metrics=['acc'],
               data_opts='',
@@ -388,10 +388,11 @@ class PIEIntent(object):
 
         # regen_pkl = False
         # if layers == 0:
-        regen_pkl = True
+        regen_pkl = False
 
         train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=regen_pkl)
         val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=regen_pkl)
+        # exit()
         # test_dataset = Dataset(data_test, test_d, data_opts, 'test', regen_pkl=True)
         # print(train_dataset.ped_data)
         # print(val_dataset.ped_data)
@@ -515,7 +516,7 @@ class PIEIntent(object):
         #     if 'st_gcn_networks_p' in name:
         #         param.requires_grad = False
             # else:
-                # print(name)
+            #     print(name)
 
         # exit()
         ## To check paramters using pytorch lightning
@@ -529,9 +530,18 @@ class PIEIntent(object):
         #                                 lr=optimizer_params['lr'],
         #                                 weight_decay=optimizer_params['decay'])
 
+        # my_list = ['edge_importance.0', 'edge_importance.1', 'edge_importance.2', 'edge_importance_loc.0']
+        # params = list(filter(lambda kv: kv[0] in my_list, train_model.named_parameters()))
+        # base_params = list(filter(lambda kv: kv[0] not in my_list, train_model.named_parameters()))
+
         optimizer = torch.optim.SGD(train_model.parameters(),
                                     lr=optimizer_params['lr'],
                                     momentum=0.9)
+
+        # optimizer = torch.optim.SGD([
+        #     {'params': [i[1]for i in base_params]},
+        #     {'params':  [i[1]for i in params], 'lr': 0.01}
+        # ], lr=optimizer_params['lr'], momentum=0.9)
 
         # optimizer = torch.optim.Adam(train_model.parameters(),
         #                             lr=optimizer_params['lr'])
@@ -568,6 +578,16 @@ class PIEIntent(object):
         max_TN = 0.5
         max_acc = 0
         max_epochs = 0
+        vari = []
+        for name, param in train_model.named_parameters():
+            if 'edge_importance' in name:
+                print(param.data.to('cpu'))
+                vari.append(param.data.to('cpu'))
+
+        for name, param in train_model.named_parameters():
+            if 'fcn' in name:
+                print(param.data.to('cpu'))
+                vari.append(param.data.to('cpu'))
 
         for epoch in range(epochs):
             accuracy = 0
@@ -585,23 +605,43 @@ class PIEIntent(object):
             y_true = []
             y_pred = []
             y_s_pred = []
-            for step, (graph, adj_matrix, adj_matrix_loc, location, ped_pose, label) in enumerate(train_loader):
+            count_cross_p, count_cross_Tp = 0, 0
+            count_cross_n, count_cross_Tn = 0, 0
+            newvari = []
 
-                if count % 10 == 0:
-                    print(count)
-                count = count + 1
+            for step, (graph, adj_matrix, location, label, node_label) in enumerate(train_loader):
 
                 G = Variable(graph.type(torch.FloatTensor)).cuda()
                 Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                Adj_loc = Variable(adj_matrix_loc.type(torch.FloatTensor)).cuda()
+                node_label = Variable(node_label.type(torch.FloatTensor)).cuda()
                 Loc = Variable(location.type(torch.FloatTensor)).cuda()
-                pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
+                # pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
                 label = Variable(label.type(torch.float)).cuda()
                 # print(label.shape)
                 # outputs, _ = train_model(G, A.squeeze(0))
-                # print(A)
-                outputs = train_model(G, Adj, Adj_loc, Loc, pose)
+                if count % 10 == 0:
+                    print(count)
+                    # print(Adj)
+                count = count + 1
 
+                outputs = train_model(G, Adj, Loc, node_label)
+
+                for num, lab in enumerate(label):
+                    check = False
+                    for num_seq in node_label[num]:
+                        if int(num_seq[1]) == 1 or int(num_seq[2]) == 1:
+                            check = True
+
+                    if check == True:
+                        if int(lab) == 1:
+                            count_cross_Tp += 1
+                            if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 1:
+                                count_cross_p += 1
+
+                        else:
+                            count_cross_Tn += 1
+                            if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 0:
+                                count_cross_n += 1
                 # if count % batch_size != 0 and step != turn_point_train:
                 #     l = loss_fn(outputs, label)
                 #     if is_fst_loss_train:
@@ -635,13 +675,24 @@ class PIEIntent(object):
 
                 y_true.append(np.asarray(label.data.to('cpu')))
                 y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
-
+                # y_s_pred.append((torch.sigmoid(outputs).data.to('cpu')))
 
             # scheduler.step()
             # print(counting_negatives)
+
             y_true = np.concatenate(y_true, axis=0)
             y_pred = np.concatenate(y_pred, axis=0)
-
+            # y_s_pred = np.concatenate(y_s_pred, axis=0)
+            print('Correct predictions of non-crossing', count_cross_n)
+            print('Total non-crossing', count_cross_Tn)
+            print('Correct predictions of crossing', count_cross_p)
+            print('Total crossing', count_cross_Tp)
+            # # calculate thersold
+            # fpr, tpr, thresholds = roc_curve(y_true, y_s_pred)
+            # gmeans = np.sqrt(tpr * (1 - fpr))
+            # ix = np.argmax(gmeans)
+            # new_threshold = thresholds[ix]
+            # y_pred_tres = np.where(y_s_pred >= new_threshold, 1, 0)
 
             TN = confusion_matrix(y_true, y_pred)[0, 0]
             FP = confusion_matrix(y_true, y_pred)[0, 1]
@@ -657,7 +708,19 @@ class PIEIntent(object):
             print("TP: %g" % TP, "FP: %g" % FP)
             print("FN: %g" % FN, "TN: %g" % TN)
             print("####")
-            #
+
+            # TN = confusion_matrix(y_true, y_pred_tres)[0, 0]
+            # FP = confusion_matrix(y_true, y_pred_tres)[0, 1]
+            # FN = confusion_matrix(y_true, y_pred_tres)[1, 0]
+            # TP = confusion_matrix(y_true, y_pred_tres)[1, 1]
+            # accuracy = accuracy_score(y_true, y_pred_tres)
+
+            # print("Accuracy threshold:  %g" % accuracy)
+            # print('CONFUSION MATRIX thresold:')
+            # print("TP: %g" % TP, "FP: %g" % FP)
+            # print("FN: %g" % FN, "TN: %g" % TN)
+            # print("####")
+            # #
             # plt.figure(1)
             # plt.plot(epoch_losses_train, "r^")
             # plt.plot(epoch_losses_train, "r", label='train')
@@ -695,9 +758,12 @@ class PIEIntent(object):
             #
             y_true = []
             y_pred = []
+            y_s_pred = []
             val_loss = 0
             count = 0
-            for step, (graph, adj_matrix, adj_matrix_loc, location, ped_pose, label) in enumerate(val_loader):
+            count_cross_p, count_cross_Tp = 0, 0
+            count_cross_n, count_cross_Tn = 0, 0
+            for step, (graph, adj_matrix, location, label, node_label) in enumerate(val_loader):
                 with torch.no_grad():
                     if count % 10 == 0:
                         print(count)
@@ -705,16 +771,32 @@ class PIEIntent(object):
 
                     G = Variable(graph.type(torch.FloatTensor)).cuda()
                     Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                    Adj_loc = Variable(adj_matrix_loc.type(torch.FloatTensor)).cuda()
+                    node_label = Variable(node_label.type(torch.FloatTensor)).cuda()
                     Loc = Variable(location.type(torch.FloatTensor)).cuda()
-                    pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
+                    # pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
                     label = Variable(label.type(torch.float)).cuda()
                     # print(label.shape)
                     # outputs, _ = train_model(G, A.squeeze(0))
                     # print(A)
-                    outputs = train_model(G, Adj, Adj_loc, Loc, pose)
+                    outputs = train_model(G, Adj, Loc, node_label)
                     # print(outputs.shape)
 
+                    for num, lab in enumerate(label):
+                        check = False
+                        for num_seq in node_label[num]:
+                            if int(num_seq[1]) == 1 or int(num_seq[2]) == 1:
+                                check = True
+
+                        if check == True:
+                            if int(lab) == 1:
+                                count_cross_Tp += 1
+                                if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 1:
+                                    count_cross_p += 1
+
+                            else:
+                                count_cross_Tn += 1
+                                if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 0:
+                                    count_cross_n += 1
                     # if count % batch_size != 0 and step != turn_point_val:
                     #     l = loss_fn(outputs, label)
                     #     if is_fst_loss_val:
@@ -751,6 +833,16 @@ class PIEIntent(object):
             y_true = np.concatenate(y_true, axis=0)
             y_pred = np.concatenate(y_pred, axis=0)
             y_s_pred = np.concatenate(y_s_pred, axis=0)
+            print('Correct predictions of non-crossing', count_cross_n)
+            print('Total non-crossing', count_cross_Tn)
+            print('Correct predictions of crossing', count_cross_p)
+            print('Total crossing', count_cross_Tp)
+
+            # fpr, tpr, thresholds = roc_curve(y_true, y_s_pred)
+            # gmeans = np.sqrt(tpr * (1 - fpr))
+            # ix = np.argmax(gmeans)
+            # new_threshold = thresholds[ix]
+            # y_pred_tres = np.where(y_s_pred >= new_threshold, 1, 0)
 
             TN = confusion_matrix(y_true, y_pred)[0, 0]
             FP = confusion_matrix(y_true, y_pred)[0, 1]
@@ -765,7 +857,7 @@ class PIEIntent(object):
 
             save = False
             if auc >= max_acc:
-                if TN/FP > 0.5:
+                if TN/(TN+FP) > 0.5:
                     max_acc = auc
                     max_TN = TN
                     max_epochs = epoch+1
@@ -781,6 +873,18 @@ class PIEIntent(object):
             print('CONFUSION MATRIX:')
             print("TP: %g" % TP, "FP: %g" % FP)
             print("FN: %g" % FN, "TN: %g" % TN)
+
+
+            # TN = confusion_matrix(y_true, y_pred_tres)[0, 0]
+            # FP = confusion_matrix(y_true, y_pred_tres)[0, 1]
+            # FN = confusion_matrix(y_true, y_pred_tres)[1, 0]
+            # TP = confusion_matrix(y_true, y_pred_tres)[1, 1]
+            # accuracy = accuracy_score(y_true, y_pred_tres)
+            # print("Accuracy threshold:  %g" % accuracy)
+
+            # print('CONFUSION MATRIX thresold:')
+            # print("TP: %g" % TP, "FP: %g" % FP)
+            # print("FN: %g" % FN, "TN: %g" % TN)
 
             print('Precision:', precision)
             print('Recall:', recall)
@@ -813,9 +917,19 @@ class PIEIntent(object):
             plt.grid()
             plt.savefig("%s/epoch_accuracy.png" % model_path.split("model.pth")[0])
             plt.close(2)
+
             print(save)
             if save is True:
-            # if (epoch+1) % 1 == 0:
+            #     for name, param in train_model.named_parameters():
+            #         if 'edge_importance' in name:
+            #             newvari.append(param.data.to('cpu'))
+            #
+            #     for name, param in train_model.named_parameters():
+            #         if 'fcn' in name:
+            #             newvari.append(param.data.to('cpu'))
+            # # if (epoch+1) % 1 == 0:
+            #     sub = [(np.subtract(vari[i], newvari[i])) for i in range(len(vari))]
+            #     print(sub)
                 model_saving_path = model_path.split("model.pth")[0] + "/model_" + "epoch_best.pth"
                 torch.save(train_model.state_dict(), model_saving_path)
 
@@ -867,7 +981,7 @@ class PIEIntent(object):
                 'decoder_input': decoder_input,
                 'output': output}
 
-        test_dataset = Dataset(data_test, test_d, data_opts, 'test', regen_pkl=True)
+        test_dataset = Dataset(data_test, test_d, data_opts, 'test', regen_pkl=False)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
                                                   batch_size=128, shuffle=False,
                                                   pin_memory=False,
@@ -889,7 +1003,7 @@ class PIEIntent(object):
         #################################################################################################
         # test_model.load_state_dict(pretrained_dict) # comment this line if you are using above code
 
-        test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_14.pth')))
+        test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_best.pth')))
         print('epoch_14')
         # overlap = 1  # train_params ['overlap']
         # print(test_model.eval())
@@ -956,10 +1070,10 @@ class PIEIntent(object):
                 out.write(img_id)
             out.release()
 
-        # for name, param in test_model.named_parameters():
+        for name, param in test_model.named_parameters():
             # if name == 'edge_importance.0':
-            #     print(name)
-            #     print(param)
+                print(name)
+                print(param)
         # exit()
 
         #####################################################################################
@@ -972,11 +1086,13 @@ class PIEIntent(object):
         y_true = []
         y_pred = []
         y_s_pred = []
+        count_cross_p = 0
+        count_cross_n = 0
         with open(model_path + '/misclassification.txt', 'wt') as fid:
             fid.write("####### Misclssification #######\n")
 
             # for step, (graph, adj_matrix, location, label, ped_ids, image, nodes, img_centre_seq) in enumerate(test_loader):
-            for step, (graph, adj_matrix, adj_matrix_loc, location, ped_pose, label) in enumerate(test_loader):
+            for step, (graph, adj_matrix, location, label, node) in enumerate(test_loader):
                 with torch.no_grad():
                     if count % 10 == 0:
                         print(count)
@@ -984,28 +1100,41 @@ class PIEIntent(object):
 
                     G = Variable(graph.type(torch.FloatTensor)).cuda()
                     Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                    Adj_loc = Variable(adj_matrix_loc.type(torch.FloatTensor)).cuda()
+                    node = Variable(node.type(torch.FloatTensor)).cuda()
                     Loc = Variable(location.type(torch.FloatTensor)).cuda()
-                    pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
+                    # pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
                     label = Variable(label.type(torch.float)).cuda()
                     # print(label.shape)
                     # outputs, _ = train_model(G, A.squeeze(0))
                     # print(A)
-                    outputs = test_model(G, Adj, Adj_loc, Loc, pose)
+                    outputs = test_model(G, Adj,  Loc, node)
 
+                    for num, lab in enumerate(label):
+                        check = False
+                        for num_seq in node[num]:
+                            if int(num_seq[1]) == 1:
+                                check = True
+
+                        if check == True:
+                            if int(lab) == 1:
+                                if int(outputs[num]) == 1:
+                                    count_cross_p += 1
+
+                            else:
+                                if int(outputs[num]) == 0:
+                                    count_cross_n += 1
 
                     y_true.append(np.asarray(label.data.to('cpu')))
                     y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
                     y_s_pred.append(torch.sigmoid(outputs).data.to('cpu'))
 
 
-
         # print('intention of crossing:', counting_negatives)
         y_true = np.concatenate(y_true, axis=0)
         y_pred = np.concatenate(y_pred, axis=0)
         y_s_pred = np.concatenate(y_s_pred, axis=0)
-        # print(some_count)
-
+        print(count_cross_p)
+        print(count_cross_n)
         count_totalp = 0
         score_p = 0
         count_p = 0
