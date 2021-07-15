@@ -33,11 +33,11 @@ class Dataset(torch.utils.data.Dataset):
         self.unique_bbox = self.dataset['unique_bbox']
         self.unique_image = self.dataset['unique_image']
 
-        self.node_info = {'pedestrian': 1,  # default should be one
-                          'vehicle': 0,
+        self.node_info = {'pedestrian': 2,  # default should be one
+                          'vehicle': 1,
                           'traffic_light': 1,
-                          'transit_station': 0,
-                          'sign': 0,
+                          'transit_station': 1,
+                          'sign': 1,
                           'crosswalk': 1,
                           'ego_vehicle': 0}
 
@@ -473,7 +473,7 @@ class Dataset(torch.utils.data.Dataset):
         #                                                                  model_name='vgg16_bn',
         #                                                                  data_subset=self.data_type))
 
-        graph, adj_matrix, decoder_input, node_label = self.load_images_and_process(index)
+        graph, adj_matrix, decoder_input, node_label, class_label = self.load_images_and_process(index)
 
         if index % 1000 == 0:
             print(decoder_input[0])
@@ -483,7 +483,8 @@ class Dataset(torch.utils.data.Dataset):
                      torch.from_numpy(adj_matrix), \
                      torch.from_numpy(decoder_input), \
                      torch.from_numpy(self.track['output'][index][0]), \
-                     torch.from_numpy(node_label)
+                     torch.from_numpy(node_label), \
+                     torch.from_numpy(class_label)
                      # torch.from_numpy(ped_pose.astype(np.float64)), \
 
         return train_data
@@ -633,11 +634,13 @@ class Dataset(torch.utils.data.Dataset):
         decoder_input = np.zeros((self.seq_len, max_nodes, len(bbox_location_seq[0][0])))
         # decoder_input = np.zeros((self.seq_len, len(bbox_location_seq[0][0])))
         graph = np.zeros((self.seq_len, max_nodes, 512, 7, 7))
+        # graph = np.zeros((2))
         adj_matrix = np.zeros((self.seq_len, max_nodes, max_nodes))
         # adj_matrix_loc = np.zeros((self.seq_len, max_nodes, max_nodes))
         # adj_matrix = np.zeros((max_nodes, max_nodes))
         # pose = np.zeros((self.seq_len, 18, 3))
-        node_label = np.zeros((self.seq_len, max_nodes, 1))
+        node_label = np.zeros((self.seq_len, max_nodes, max_nodes))
+        class_label = np.zeros((self.seq_len, max_nodes))
         for s in range(self.seq_len):
 
             step = node_features[s]
@@ -645,7 +648,7 @@ class Dataset(torch.utils.data.Dataset):
             # pose[s, :, 0:2] = np.asarray(ped_pose[s]).reshape(18, 2)
             # pose[s, :, -1] = 0.5
 
-            # img_cp_p = img_centre_seq[s][0]
+            img_cp_p = bbox_location[0]
             for h, stp in enumerate(step):
                 if stp != 0:
                     with open(str(stp[0]), 'rb') as fid:
@@ -654,7 +657,8 @@ class Dataset(torch.utils.data.Dataset):
 
                         except:
                             img_features = pickle.load(fid, encoding='bytes')
-                    node_label[s, h, :] = h
+                    node_label[s, h, h] = 1
+                    class_label[s, h] = 1
                     img_features = np.squeeze(img_features)
                     graph[s, h, :] = img_features
                     decoder_input[s, h, :] = bbox_location[h]
@@ -671,10 +675,10 @@ class Dataset(torch.utils.data.Dataset):
 
                     if self.structure == 'star' and h > 0:
 
-                            # img_cp_s = img_centre_seq[s][h]
+                            img_cp_s = bbox_location[h]
                             # l2_norm = self.anorm(img_cp_p, img_cp_s)
-                            adj_matrix[s, h, 0] = 1
-                            adj_matrix[s, 0, h] = 1
+                            adj_matrix[s, h, 0] =  1#np.subtract(img_cp_p[0],img_cp_s[0])
+                            adj_matrix[s, 0, h] = 1#np.subtract(img_cp_s[0],img_cp_p[0])
                             # adj_matrix_loc[s, h, 0] = 1  # l2_norm
                             # adj_matrix_loc[s, 0, h] = 1  # l2_norm
 
@@ -701,7 +705,7 @@ class Dataset(torch.utils.data.Dataset):
         if visualise:
             self.visualisation(self.seq_len, node_features, img_centre_seq)
 
-        return graph, adj_matrix, decoder_input, node_label
+        return graph, adj_matrix, decoder_input, node_label, class_label
 
     def __len__(self):
         return self.num_examples

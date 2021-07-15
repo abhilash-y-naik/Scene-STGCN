@@ -905,7 +905,7 @@ class PIE(object):
                   'squarify_ratio': 0,
                   'data_split_type': 'default',  # kfold, random, default
                   'seq_type': 'intention',
-                  'min_track_size': 15,
+                  'min_track_size': 75,
                   'random_params': {'ratios': None,
                                     'val_data': True,
                                     'regen_data': False},
@@ -1148,8 +1148,6 @@ class PIE(object):
                     if params['data_split_type'] != 'default' and pid not in _pids:
                         continue
 
-                    # if int(pid_annots[pid]['attributes']['crossing']) == -1:
-                    #     continue
                     num_pedestrians += 1
                     exp_start_frame = pid_annots[pid]['attributes']['exp_start_point']
                     critical_frame = pid_annots[pid]['attributes']['critical_point']

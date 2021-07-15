@@ -511,12 +511,12 @@ class PIEIntent(object):
         #
         # exit()
         # print(train_model.eval())
-
+        #
         # for name, param in train_model.named_parameters():
-        #     if 'st_gcn_networks_p' in name:
+        #     if 'edge_importance_loc' in name:
         #         param.requires_grad = False
-            # else:
-            #     print(name)
+        #     # else:
+        #         print(name)
 
         # exit()
         ## To check paramters using pytorch lightning
@@ -609,11 +609,13 @@ class PIEIntent(object):
             count_cross_n, count_cross_Tn = 0, 0
             newvari = []
 
-            for step, (graph, adj_matrix, location, label, node_label) in enumerate(train_loader):
+            for step, (graph, adj_matrix, location, label, node_label,class_label) in enumerate(train_loader):
 
                 G = Variable(graph.type(torch.FloatTensor)).cuda()
+                # G = []
                 Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
                 node_label = Variable(node_label.type(torch.FloatTensor)).cuda()
+                class_label = Variable(class_label.type(torch.FloatTensor)).cuda()
                 Loc = Variable(location.type(torch.FloatTensor)).cuda()
                 # pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
                 label = Variable(label.type(torch.float)).cuda()
@@ -624,24 +626,24 @@ class PIEIntent(object):
                     # print(Adj)
                 count = count + 1
 
-                outputs = train_model(G, Adj, Loc, node_label)
+                outputs = train_model(G, Adj, Loc, node_label,class_label)
 
-                for num, lab in enumerate(label):
-                    check = False
-                    for num_seq in node_label[num]:
-                        if int(num_seq[1]) == 1 or int(num_seq[2]) == 1:
-                            check = True
-
-                    if check == True:
-                        if int(lab) == 1:
-                            count_cross_Tp += 1
-                            if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 1:
-                                count_cross_p += 1
-
-                        else:
-                            count_cross_Tn += 1
-                            if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 0:
-                                count_cross_n += 1
+                # for num, lab in enumerate(label):
+                #     check = False
+                #     for num_seq in node_label[num]:
+                #         if int(num_seq[1]) == 1 or int(num_seq[2]) == 1:
+                #             check = True
+                #
+                #     if check == True:
+                #         if int(lab) == 1:
+                #             count_cross_Tp += 1
+                #             if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 1:
+                #                 count_cross_p += 1
+                #
+                #         else:
+                #             count_cross_Tn += 1
+                #             if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 0:
+                #                 count_cross_n += 1
                 # if count % batch_size != 0 and step != turn_point_train:
                 #     l = loss_fn(outputs, label)
                 #     if is_fst_loss_train:
@@ -763,40 +765,42 @@ class PIEIntent(object):
             count = 0
             count_cross_p, count_cross_Tp = 0, 0
             count_cross_n, count_cross_Tn = 0, 0
-            for step, (graph, adj_matrix, location, label, node_label) in enumerate(val_loader):
+            for step, (graph, adj_matrix, location, label, node_label,class_label) in enumerate(val_loader):
                 with torch.no_grad():
                     if count % 10 == 0:
                         print(count)
                     count = count + 1
 
                     G = Variable(graph.type(torch.FloatTensor)).cuda()
+                    # G = []
                     Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
                     node_label = Variable(node_label.type(torch.FloatTensor)).cuda()
+                    class_label = Variable(class_label.type(torch.FloatTensor)).cuda()
                     Loc = Variable(location.type(torch.FloatTensor)).cuda()
                     # pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
                     label = Variable(label.type(torch.float)).cuda()
                     # print(label.shape)
                     # outputs, _ = train_model(G, A.squeeze(0))
                     # print(A)
-                    outputs = train_model(G, Adj, Loc, node_label)
+                    outputs = train_model(G, Adj, Loc, node_label,class_label)
                     # print(outputs.shape)
 
-                    for num, lab in enumerate(label):
-                        check = False
-                        for num_seq in node_label[num]:
-                            if int(num_seq[1]) == 1 or int(num_seq[2]) == 1:
-                                check = True
-
-                        if check == True:
-                            if int(lab) == 1:
-                                count_cross_Tp += 1
-                                if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 1:
-                                    count_cross_p += 1
-
-                            else:
-                                count_cross_Tn += 1
-                                if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 0:
-                                    count_cross_n += 1
+                    # for num, lab in enumerate(label):
+                    #     check = False
+                    #     for num_seq in node_label[num]:
+                    #         if int(num_seq[1]) == 1 or int(num_seq[2]) == 1:
+                    #             check = True
+                    #
+                    #     if check == True:
+                    #         if int(lab) == 1:
+                    #             count_cross_Tp += 1
+                    #             if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 1:
+                    #                 count_cross_p += 1
+                    #
+                    #         else:
+                    #             count_cross_Tn += 1
+                    #             if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 0:
+                    #                 count_cross_n += 1
                     # if count % batch_size != 0 and step != turn_point_val:
                     #     l = loss_fn(outputs, label)
                     #     if is_fst_loss_val:
@@ -920,16 +924,16 @@ class PIEIntent(object):
 
             print(save)
             if save is True:
-            #     for name, param in train_model.named_parameters():
-            #         if 'edge_importance' in name:
-            #             newvari.append(param.data.to('cpu'))
-            #
-            #     for name, param in train_model.named_parameters():
-            #         if 'fcn' in name:
-            #             newvari.append(param.data.to('cpu'))
+                for name, param in train_model.named_parameters():
+                    if 'edge_importance' in name:
+                        newvari.append(param.data.to('cpu'))
+
+                for name, param in train_model.named_parameters():
+                    if 'fcn' in name:
+                        newvari.append(param.data.to('cpu'))
             # # if (epoch+1) % 1 == 0:
-            #     sub = [(np.subtract(vari[i], newvari[i])) for i in range(len(vari))]
-            #     print(sub)
+                sub = [(np.subtract(vari[i], newvari[i])) for i in range(len(vari))]
+                print(sub)
                 model_saving_path = model_path.split("model.pth")[0] + "/model_" + "epoch_best.pth"
                 torch.save(train_model.state_dict(), model_saving_path)
 

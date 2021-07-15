@@ -90,7 +90,7 @@ def train_intent(train_test, model, data_path):
 
         t = PIEIntent()
 
-        pretrained_model_path = 'data/graph/intention/1ped_1crosswalk/13Jun2021-18h07m15s'
+        pretrained_model_path = 'data/graph/intention/11Jul2021-21h35m21s'
         # pretrained_model_path = 'graph_model/pretrained weight'
         if train_test < 2:  # Train
 

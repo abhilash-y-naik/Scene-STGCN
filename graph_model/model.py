@@ -168,14 +168,14 @@ class social_stgcnn(nn.Module):
 
         self.st_gcn_networks = nn.ModuleList()
         self.st_gcn_networks.append(
-            st_gcn(512, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0.5))
+            st_gcn(512+max_nodes, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0.5))
         for i in range(1, layers):
             self.st_gcn_networks.append(st_gcn(64, 64, (kernel_size, seq_len), 1,
                                                residual=False, dropout_tcn=0.5, dropout_conv=0.2))
 
         self.st_gcn_networks_loc = nn.ModuleList()
         self.st_gcn_networks_loc.append(
-            st_gcn(4+1, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0))
+            st_gcn(4+max_nodes, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0))
         for i in range(1, 1):
             self.st_gcn_networks_loc.append(st_gcn(64, 64, (kernel_size, seq_len), 1,
                                                    residual=False, dropout_tcn=0.5, dropout_conv=0.2))
@@ -189,7 +189,7 @@ class social_stgcnn(nn.Module):
         # self.st_gcn_networks_pose_bn = list(self.st_gcn_networks_p.children())[0]
         # self.st_gcn_networks_pose = nn.Sequential(*list(self.st_gcn_networks_p.children())[1:-2][0])
         # self.edge_importance_pose = list(self.st_gcn_networks_p.children())[-2:-1][0]
-        # self.conv = nn.Conv1d(4, 16, kernel_size=1)
+        # self.conv = nn.Conv2d(4, 16, kernel_size=1)
         self.max_nodes = max_nodes
         self.seed = seed
 
@@ -202,12 +202,12 @@ class social_stgcnn(nn.Module):
                 nn.Parameter(torch.ones(seq_len, self.max_nodes, self.max_nodes, requires_grad=True))
                 for i in self.st_gcn_networks
             ])
-            # [nn.init.xavier_normal_(self.edge_importance[i]) for i in range(len(self.edge_importance))]
+            # [nn.init.kaiming_normal_(self.edge_importance[i]) for i in range(len(self.edge_importance))]
             self.edge_importance_loc = nn.ParameterList([
                 nn.Parameter(torch.ones(seq_len, self.max_nodes, self.max_nodes, requires_grad=True))
                 for i in self.st_gcn_networks_loc
             ])
-            # [nn.init.xavier_normal_(self.edge_importance_loc[i]) for i in range(len(self.edge_importance_loc))]
+            # [nn.init.kaiming_normal_(self.edge_importance_loc[i]) for i in range(len(self.edge_importance_loc))]
 
         else:
             self.edge_importance = [1] * len(self.st_gcn_networks)
@@ -215,8 +215,8 @@ class social_stgcnn(nn.Module):
 
         self.bn = nn.BatchNorm1d(512 * max_nodes)
         self.bn_loc = nn.BatchNorm1d(4 * max_nodes)
-        self.graph_loc = GraphNorm(4)
-        self.dec = nn.LSTM(64+512, 128, num_layers=1, bias=True,
+        # self.graph_loc = GraphNorm(4)
+        self.dec = nn.LSTM(64+64, 128, num_layers=1, bias=True,
                            batch_first=True, bidirectional=False)
         nn.init.xavier_normal_(self.dec.weight_hh_l0)
         self.dropout_dec = nn.Dropout(p=0.4)
@@ -225,7 +225,7 @@ class social_stgcnn(nn.Module):
         # self.dropout_class = nn.Dropout(p=0.1)
         nn.init.xavier_normal_(self.fcn.weight)
 
-    def forward(self, v, a, loc, node_label):
+    def forward(self, v, a, loc, node_label,class_label):
 
         b, t, n, c, h, w = v.size()
         v = v.view(b * t * n, c, h, w)
@@ -242,26 +242,19 @@ class social_stgcnn(nn.Module):
         v = v.view(b, n, c_pool * w_pool * h_pool, t)
         v = v.permute(0, 2, 3, 1).contiguous()
 
-        # b_loc, t_loc, n_loc, c_loc = loc.size()
-        # loc = loc.permute(0, 1, 2, 3).contiguous()
-        # loc = self.graph_loc(loc.view(b_loc * t_loc, n_loc, c_loc))
-        # loc = loc.view(b_loc, t_loc, n_loc, c_loc)
-        # loc = loc.permute(0, 3, 1, 2).contiguous()
-        # b_node, t_node, n_node, lab_node = node_label.size()
-        # node_label = node_label.permute(0, 3, 1, 2)
-        # loc = torch.cat((loc, node_label), dim=1)
-
         b_loc, t_loc, n_loc, c_loc = loc.size()
         loc = loc.permute(0, 2, 3, 1).contiguous()
         loc = self.bn_loc(loc.view(b_loc, n_loc * c_loc, t_loc))
         loc = loc.view(b_loc, n_loc, c_loc, t_loc)
         loc = loc.permute(0, 2, 3, 1).contiguous()
+
         b_node, t_node, n_node, lab_node = node_label.size()
         node_label = node_label.permute(0, 3, 1, 2)
         loc = torch.cat((loc, node_label), dim=1)
+        v = torch.cat((v, node_label), dim=1)
 
-        # for graph, imp in zip(self.st_gcn_networks, self.edge_importance):
-        #     v, _ = graph(v, a*imp)
+        for graph, imp in zip(self.st_gcn_networks, self.edge_importance):
+            v, _ = graph(v, a*imp)
 
         for graph, imp_loc in zip(self.st_gcn_networks_loc, self.edge_importance_loc):
             loc, _ = graph(loc, a*imp_loc)
@@ -289,10 +282,12 @@ class social_stgcnn(nn.Module):
         v = v[:, :, :, 0]
 
         loc = loc[:, :, :, 0]
+        class_label = class_label.permute(0, 2, 1)
+
         # x = self.conv(x) # Basic Model to have fair comparision: nn.Conv1d(4, 16, kernel_size=1)
 
         x = torch.cat((v, loc), dim=1)
-
+        # x = torch.cat((x, class_label), dim=1)
         x = x.permute(0, 2, 1).contiguous()
         x, _ = self.dec(x)
         x = torch.tanh(self.dropout_dec(x))
