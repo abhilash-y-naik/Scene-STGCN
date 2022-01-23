@@ -33,11 +33,11 @@ class Dataset(torch.utils.data.Dataset):
         self.unique_bbox = self.dataset['unique_bbox']
         self.unique_image = self.dataset['unique_image']
 
-        self.node_info = {'pedestrian': 2,  # default should be one
-                          'vehicle': 1,
+        self.node_info = {'pedestrian':1,  # default should be one
+                          'vehicle': 0,
                           'traffic_light': 1,
-                          'transit_station': 1,
-                          'sign': 1,
+                          'transit_station': 0,
+                          'sign': 0,
                           'crosswalk': 1,
                           'ego_vehicle': 0}
 
@@ -454,7 +454,6 @@ class Dataset(torch.utils.data.Dataset):
         # print('Total frames of Crosswalk above avg:', np.sum(count_cross >= np.mean(count_cross)))
         # print('Total frames where there are %d Crosswalk:' % np.round(np.mean(count_cross)), np.sum(count_cross == np.round(np.mean(count_cross))))
         # print('Total number of Crosswalk:', np.sum(count_cross))
-        #
 
 
     def __getitem__(self, index):
@@ -676,11 +675,11 @@ class Dataset(torch.utils.data.Dataset):
                     if self.structure == 'star' and h > 0:
 
                             img_cp_s = bbox_location[h]
-                            # l2_norm = self.anorm(img_cp_p, img_cp_s)
-                            adj_matrix[s, h, 0] =  1#np.subtract(img_cp_p[0],img_cp_s[0])
+                            l2_norm = self.anorm(img_cp_p, img_cp_s)
+                            adj_matrix[s, h, 0] = 1#np.subtract(img_cp_p[0],img_cp_s[0])
                             adj_matrix[s, 0, h] = 1#np.subtract(img_cp_s[0],img_cp_p[0])
-                            # adj_matrix_loc[s, h, 0] = 1  # l2_norm
-                            # adj_matrix_loc[s, 0, h] = 1  # l2_norm
+                            # adj_matrix[s, h, 0] = l2_norm
+                            # adj_matrix[s, 0, h] = l2_norm
 
                     elif self.structure == 'fully_connected':
                         # For fully connected
@@ -692,9 +691,9 @@ class Dataset(torch.utils.data.Dataset):
                             # adj_matrix_loc[s, h, k] = 1 # l2_norm
                             # adj_matrix_loc[s, k, h] = 1  # l2_norm
 
-
             # g = nx.from_numpy_matrix(adj_matrix[s, :, :])
-            # adj_matrix[s, :, :] = self.normalized_laplacian_matrix(g).toarray()
+            # adj_matrix[s, :, :] = nx.normalized_laplacian_matrix(g).toarray()
+
             # graph[s, :, :] = self.node_normalise(graph[s, :, :])
             # decoder_input[s, :, :] = self.node_normalise(decoder_input[s, :, :])
             adj_matrix[s, :, :] = self.normalize_undigraph(adj_matrix[s, :, :])

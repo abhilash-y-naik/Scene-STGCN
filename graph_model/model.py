@@ -168,14 +168,14 @@ class social_stgcnn(nn.Module):
 
         self.st_gcn_networks = nn.ModuleList()
         self.st_gcn_networks.append(
-            st_gcn(512+max_nodes, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0.5))
+            st_gcn(512, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0.5))
         for i in range(1, layers):
             self.st_gcn_networks.append(st_gcn(64, 64, (kernel_size, seq_len), 1,
                                                residual=False, dropout_tcn=0.5, dropout_conv=0.2))
 
         self.st_gcn_networks_loc = nn.ModuleList()
         self.st_gcn_networks_loc.append(
-            st_gcn(4+max_nodes, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0))
+            st_gcn(4, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0))
         for i in range(1, 1):
             self.st_gcn_networks_loc.append(st_gcn(64, 64, (kernel_size, seq_len), 1,
                                                    residual=False, dropout_tcn=0.5, dropout_conv=0.2))
@@ -240,7 +240,7 @@ class social_stgcnn(nn.Module):
         v = v.view(b, n * c_pool * w_pool * h_pool, t)
         v = self.bn(v)
         v = v.view(b, n, c_pool * w_pool * h_pool, t)
-        v = v.permute(0, 2, 3, 1).contiguous()
+        v = v.permute(0, 2, 3, 1).contiguous() # batch,features,time,nodes
 
         b_loc, t_loc, n_loc, c_loc = loc.size()
         loc = loc.permute(0, 2, 3, 1).contiguous()
@@ -250,8 +250,9 @@ class social_stgcnn(nn.Module):
 
         b_node, t_node, n_node, lab_node = node_label.size()
         node_label = node_label.permute(0, 3, 1, 2)
-        loc = torch.cat((loc, node_label), dim=1)
-        v = torch.cat((v, node_label), dim=1)
+
+        # loc = torch.cat((loc, node_label), dim=1)
+        # v = torch.cat((v, node_label), dim=1)
 
         for graph, imp in zip(self.st_gcn_networks, self.edge_importance):
             v, _ = graph(v, a*imp)
@@ -280,13 +281,21 @@ class social_stgcnn(nn.Module):
         ##############################################################################################
 
         v = v[:, :, :, 0]
-
+        # v = torch.sum(v,dim=3)
         loc = loc[:, :, :, 0]
-        class_label = class_label.permute(0, 2, 1)
+        # loc = torch.sum(loc,dim=3)
+        # class_label = class_label.permute(0, 2, 1)
 
         # x = self.conv(x) # Basic Model to have fair comparision: nn.Conv1d(4, 16, kernel_size=1)
 
         x = torch.cat((v, loc), dim=1)
+
+        # x = x.permute(0, 1, 3, 2).contiguous()
+        # print(x.shape)
+        # exit()
+        # x = x.view(b_node, 523*7, t_node)
+        # print(x.shape)
+        # exit()
         # x = torch.cat((x, class_label), dim=1)
         x = x.permute(0, 2, 1).contiguous()
         x, _ = self.dec(x)

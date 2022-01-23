@@ -90,7 +90,7 @@ def train_intent(train_test, model, data_path):
 
         t = PIEIntent()
 
-        pretrained_model_path = 'data/graph/intention/11Jul2021-21h35m21s'
+        pretrained_model_path = 'data/graph/intention/05Dec2021-17h43m50s'
         # pretrained_model_path = 'graph_model/pretrained weight'
         if train_test < 2:  # Train
 
@@ -241,7 +241,7 @@ def main(train_test=0, model=1, data_path='./PIE_dataset'):
 if __name__ == '__main__':
 
     try:
-        train_test = int(0)  # train_test: 0 - train only, 1 - train and test, 2 - test only
+        train_test = int(2)  # train_test: 0 - train only, 1 - train and test, 2 - test only
         model = int(1)  # model:0 - PIE, model:1 - Graph
         data_path = './PIE_dataset'  # Path of the split images
         # for i in range(10):

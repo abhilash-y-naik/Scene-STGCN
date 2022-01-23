@@ -52,11 +52,9 @@ class PIEIntent(object):
         _lstm_recurrent_dropout: recurrent dropout
         _convlstm_num_filters: number of filters in convLSTM
         _convlstm_kernel_size: kernel size in convLSTM
-
     Model attributes: set during training depending on the data
         _encoder_input_size: size of the encoder input
         _decoder_input_size: size of the encoder_output
-
     Methods:
         load_images_and_process: generates trajectories by sampling from pedestrian sequences
         get_data_slices: generate tracks for training/testing
@@ -388,7 +386,7 @@ class PIEIntent(object):
 
         # regen_pkl = False
         # if layers == 0:
-        regen_pkl = False
+        regen_pkl =False
 
         train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=regen_pkl)
         val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=regen_pkl)
@@ -771,6 +769,7 @@ class PIEIntent(object):
                         print(count)
                     count = count + 1
 
+
                     G = Variable(graph.type(torch.FloatTensor)).cuda()
                     # G = []
                     Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
@@ -1008,7 +1007,7 @@ class PIEIntent(object):
         # test_model.load_state_dict(pretrained_dict) # comment this line if you are using above code
 
         test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_best.pth')))
-        print('epoch_14')
+        # print('epoch_14')
         # overlap = 1  # train_params ['overlap']
         # print(test_model.eval())
         def visualisation(seq_len, nodes, img_centre_seq, details):
@@ -1096,37 +1095,39 @@ class PIEIntent(object):
             fid.write("####### Misclssification #######\n")
 
             # for step, (graph, adj_matrix, location, label, ped_ids, image, nodes, img_centre_seq) in enumerate(test_loader):
-            for step, (graph, adj_matrix, location, label, node) in enumerate(test_loader):
+            for step, (graph, adj_matrix, location, label, node_label,class_label) in enumerate(test_loader):
                 with torch.no_grad():
                     if count % 10 == 0:
                         print(count)
                     count = count + 1
 
                     G = Variable(graph.type(torch.FloatTensor)).cuda()
+                    # G = []
                     Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
-                    node = Variable(node.type(torch.FloatTensor)).cuda()
+                    node_label = Variable(node_label.type(torch.FloatTensor)).cuda()
+                    class_label = Variable(class_label.type(torch.FloatTensor)).cuda()
                     Loc = Variable(location.type(torch.FloatTensor)).cuda()
                     # pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
                     label = Variable(label.type(torch.float)).cuda()
                     # print(label.shape)
                     # outputs, _ = train_model(G, A.squeeze(0))
                     # print(A)
-                    outputs = test_model(G, Adj,  Loc, node)
+                    outputs = test_model(G, Adj, Loc, node_label,class_label)
 
-                    for num, lab in enumerate(label):
-                        check = False
-                        for num_seq in node[num]:
-                            if int(num_seq[1]) == 1:
-                                check = True
-
-                        if check == True:
-                            if int(lab) == 1:
-                                if int(outputs[num]) == 1:
-                                    count_cross_p += 1
-
-                            else:
-                                if int(outputs[num]) == 0:
-                                    count_cross_n += 1
+                    # for num, lab in enumerate(label):
+                    #     check = False
+                    #     for num_seq in node[num]:
+                    #         if int(num_seq[1]) == 1:
+                    #             check = True
+                    #
+                    #     if check == True:
+                    #         if int(lab) == 1:
+                    #             if int(outputs[num]) == 1:
+                    #                 count_cross_p += 1
+                    #
+                    #         else:
+                    #             if int(outputs[num]) == 0:
+                    #                 count_cross_n += 1
 
                     y_true.append(np.asarray(label.data.to('cpu')))
                     y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
@@ -1200,6 +1201,3 @@ class PIEIntent(object):
         recall = recall_score(y_true, y_pred)
         acc = accuracy_score(y_true, y_pred)
         return acc, f1, precision, recall
-
-
-
