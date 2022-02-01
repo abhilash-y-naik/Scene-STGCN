@@ -33,13 +33,13 @@ class Dataset(torch.utils.data.Dataset):
         self.unique_bbox = self.dataset['unique_bbox']
         self.unique_image = self.dataset['unique_image']
 
-        self.node_info = {'pedestrian':1,  # default should be one
-                          'vehicle': 0,
+        self.node_info = {'pedestrian':2,  # default should be one
+                          'vehicle': 1,
                           'traffic_light': 1,
                           'transit_station': 0,
-                          'sign': 0,
+                          'sign': 1,
                           'crosswalk': 1,
-                          'ego_vehicle': 0}
+                          'ego_vehicle': 1}
 
         self.structure = 'star'  # 'fully_connected'
         # self.structure = 'fully_connected'  #
@@ -405,7 +405,7 @@ class Dataset(torch.utils.data.Dataset):
         # print('Number of Negative samples(Non-crossing):', self.num_examples-count_positive_samples )
 
 
-        # name = count_cross
+        # name = count_ped
         # self.ped_data = np.zeros(np.max(name)+1)
         # for i in range(np.max(name)+1):
         #     for c in name:

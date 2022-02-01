@@ -377,7 +377,7 @@ class PIEIntent(object):
         train_d = self.get_train_val_data(data_train, data_type, seq_length, 0.5, 'train', datasize)
 
         val_d = self.get_train_val_data(data_val, data_type, seq_length, 0, 'val')
-        # test_d = self.get_train_val_data(data_test, data_type, seq_length, 0)
+        # test_d = self.get_train_val_data(data_test, data_type, seq_length, 0, 'test')
 
         self._encoder_seq_length = train_d['decoder_input'].shape[1]
         self._decoder_seq_length = train_d['decoder_input'].shape[1]
@@ -386,7 +386,7 @@ class PIEIntent(object):
 
         # regen_pkl = False
         # if layers == 0:
-        regen_pkl =False
+        regen_pkl = True
 
         train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=regen_pkl)
         val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=regen_pkl)
@@ -426,7 +426,7 @@ class PIEIntent(object):
         #         val_ped[i] = val_dataset.ped_data[i]
         #     for i in range(len(train_dataset.ped_data)):
         #         train_ped[i] = train_dataset.ped_data[i]
-
+        #
         # plt.figure(1)
         # # plt.add_axes([0, 0, 1, 1])
         # plt.bar(np.arange(max)-0.2, train_ped, color="r", width=0.2)
@@ -436,13 +436,14 @@ class PIEIntent(object):
         # plt.ylim(0, 100)
         # plt.xlim(+0.50, 5.50)
         # plt.yticks(np.arange(0, 100, 10))
-        # plt.xlabel("Number of crosswalk")
-        # plt.title("Data distribution of crosswalk")
+        # plt.xlabel("Number of secondary pedestrain")
+        # plt.title("Data distribution of secondary pedestrain")
         # plt.legend(['train', 'val', 'test'])
         # plt.grid(axis='y')
-        # plt.savefig("U:/thesis_code/data_crosswalk1.png")
+        # plt.savefig("./data_pedestrain.png")
         # plt.close(1)
-
+        #
+        # exit()
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                                    batch_size=128, shuffle=True, num_workers=4,
                                                    pin_memory=False)

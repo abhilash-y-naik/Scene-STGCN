@@ -113,7 +113,8 @@ def train_intent(train_test, model, data_path):
 
             regen_pkl = False
             data_save_path = os.path.join('./PIE_dataset' + '/data_cache/graph/' + 'beh_seq_test' + '.pkl')
-            if os.path.exists(data_save_path) and not regen_pkl:
+            if os.path.exists(data_save_path) \
+                    :
                 with open(data_save_path, 'rb') as fid:
                     try:
                         beh_seq_val = pickle.load(fid)
@@ -137,11 +138,12 @@ def train_intent(train_test, model, data_path):
             #     beh_seq_test = imdb.generate_data_trajectory_sequence('test', **data_opts)
             #     # beh_seq_val = imdb.balance_samples_count(beh_seq_val, label_type='intention_binary')
             #     with open(data_save_path, 'wb') as fid:
-            #         pickle.dump(beh_seq_val, fid, pickle.HIGHEST_PROTOCOL)
+            #         pickle.dump(beh_seq_test, fid, pickle.HIGHEST_PROTOCOL)
 
             saved = t.train(data_train=beh_seq_train,
                                            data_val=beh_seq_val,
                                            data_test='',
+                                           # data_test='',
                                            epochs=50,
                                            batch_size=128,
                                            data_opts=data_opts)
@@ -241,7 +243,7 @@ def main(train_test=0, model=1, data_path='./PIE_dataset'):
 if __name__ == '__main__':
 
     try:
-        train_test = int(2)  # train_test: 0 - train only, 1 - train and test, 2 - test only
+        train_test = int(0)  # train_test: 0 - train only, 1 - train and test, 2 - test only
         model = int(1)  # model:0 - PIE, model:1 - Graph
         data_path = './PIE_dataset'  # Path of the split images
         # for i in range(10):
