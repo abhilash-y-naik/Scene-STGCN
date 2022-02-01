@@ -1,7 +1,7 @@
 # Scene-STGCN
 
 <p align="center">
-<img src="framework.pdf" alt="Scene-STGCN" align="middle" width="600"/>
+<img src="framework.png" alt="Scene-STGCN" align="middle" width="600"/>
 </p>
 
 
