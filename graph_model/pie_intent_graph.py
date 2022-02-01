@@ -27,15 +27,9 @@ from sklearn.metrics import roc_auc_score
 from sklearn.metrics import average_precision_score
 
 from graph_model.utils import *
-
-
-# from graph_model.model import *
 from graph_model.model import *
-from graph_model.dataset_model_conv import Dataset
+from graph_model.dataset import Dataset
 
-
-# from graph_model.dataset import Dataset, Dataset_test
-# from graph_model.model_conv_spatial import *
 
 from matplotlib import pyplot
 
@@ -72,15 +66,6 @@ class PIEIntent(object):
         self.obs_seq_len = seq_len
         self.kernel_size = kernel_size
         self.pred_seq_len = pred_seq_len
-        # self.seed = 2309
-        self.seed = ''
-        # torch.manual_seed(self.seed)
-        # torch.cuda.manual_seed(self.seed)
-        # torch.cuda.manual_seed_all(self.seed)  # if you are using multi-GPU.
-        # np.random.seed(self.seed)  # Numpy module.
-        # random.seed(self.seed)  # Python random module.
-        # torch.backends.cudnn.benchmark = False
-        # torch.backends.cudnn.deterministic = True
 
     def get_model_config(self):
         """
@@ -258,47 +243,6 @@ class PIEIntent(object):
         if len(decoder_input) == 0:
             decoder_input = np.zeros(shape=np.array(bboxes).shape)
 
-        # if type == 'train':
-        #     count_p = 0
-        #     count_n = 0
-        #     images_s = []
-        #     bboxes_s = []
-        #     ped_ids_s = []
-        #     frame_ids_s = []
-        #     # encoder_input_s = []
-        #     decoder_input_s = []
-        #     output_s = []
-        #     for num_i, out_i in enumerate(output):
-        #         if out_i[0] == 1 and count_p < datasize:
-        #
-        #             count_p += 1
-        #             images_s.append(images[num_i])
-        #             bboxes_s.append(bboxes[num_i])
-        #             ped_ids_s.append(ped_ids[num_i])
-        #             frame_ids_s.append(frame_ids[num_i])
-        #             # encoder_input_s.append(encoder_input[num_i])
-        #             decoder_input_s.append(decoder_input[num_i])
-        #             output_s.append(output[num_i])
-        #
-        #         elif out_i[0] == 0 and count_n < datasize:
-        #
-        #             count_n += 1
-        #             images_s.append(images[num_i])
-        #             bboxes_s.append(bboxes[num_i])
-        #             ped_ids_s.append(ped_ids[num_i])
-        #             frame_ids_s.append(frame_ids[num_i])
-        #             # encoder_input_s.append(encoder_input[num_i])
-        #             decoder_input_s.append(decoder_input[num_i])
-        #             output_s.append(output[num_i])
-        # else:
-        #
-        #     images_s = images
-        #     bboxes_s = bboxes
-        #     ped_ids_s = ped_ids
-        #     frame_ids_s = frame_ids
-        #     decoder_input_s = decoder_input
-        #     output_s = output
-
         images_s = images
         bboxes_s = bboxes
         ped_ids_s = ped_ids
@@ -316,9 +260,7 @@ class PIEIntent(object):
 
     def get_model(self, max_nodes):
 
-        # train_model = social_stgcnn(n_stgcnn=model['n_stgcnn'], n_txpcnn=model['n_txpcnn'],
-        #                             seq_len=model['obs_seq_len'], kernel_size=model['kernel_size']).cuda()
-        train_model = social_stgcnn(max_nodes=max_nodes, seed=self.seed, layers=3).cuda()
+        train_model = social_stgcnn(max_nodes=max_nodes).cuda()
 
         return train_model
 
@@ -333,7 +275,6 @@ class PIEIntent(object):
               loss=['binary_crossentropy'],
               metrics=['acc'],
               data_opts='',
-              layers = 3,
               datasize = 500):
 
         """
@@ -372,78 +313,21 @@ class PIEIntent(object):
                         'dataset': 'pie'}
 
         self._model_type = train_config['model']
-        # data_opts['seq_overlap_rate']
         seq_length = data_opts['max_size_observe']
+        
         train_d = self.get_train_val_data(data_train, data_type, seq_length, 0.5, 'train', datasize)
-
         val_d = self.get_train_val_data(data_val, data_type, seq_length, 0, 'val')
-        # test_d = self.get_train_val_data(data_test, data_type, seq_length, 0, 'test')
+
 
         self._encoder_seq_length = train_d['decoder_input'].shape[1]
         self._decoder_seq_length = train_d['decoder_input'].shape[1]
 
         self._sequence_length = self._encoder_seq_length
 
-        # regen_pkl = False
-        # if layers == 0:
-        regen_pkl = True
+        train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=True)
+        val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=True)
 
-        train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=regen_pkl)
-        val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=regen_pkl)
-        # exit()
-        # test_dataset = Dataset(data_test, test_d, data_opts, 'test', regen_pkl=True)
-        # print(train_dataset.ped_data)
-        # print(val_dataset.ped_data)
-        # print(test_dataset.ped_data)
-        # if (len(train_dataset.ped_data) >= len(val_dataset.ped_data)) and \
-        #         (len(train_dataset.ped_data) >= len(test_dataset.ped_data)):
-        #     max = len(train_dataset.ped_data)
-        #     train_ped = train_dataset.ped_data
-        #     val_ped = np.zeros(max)
-        #     test_ped = np.zeros(max)
-        #     for i in range(len(val_dataset.ped_data)):
-        #         val_ped[i] = val_dataset.ped_data[i]
-        #     for i in range(len(test_dataset.ped_data)):
-        #         test_ped[i] = test_dataset.ped_data[i]
-        #
-        # elif (len(val_dataset.ped_data) >= len(train_dataset.ped_data)) and \
-        #         (len(val_dataset.ped_data) >= len(test_dataset.ped_data)):
-        #     max = len(val_dataset.ped_data)
-        #     val_ped = val_dataset.ped_data
-        #     train_ped = np.zeros(max)
-        #     test_ped = np.zeros(max)
-        #     for i in range(len(test_dataset.ped_data)):
-        #         test_ped[i] = test_dataset.ped_data[i]
-        #     for i in range(len(train_dataset.ped_data)):
-        #         train_ped[i] = train_dataset.ped_data[i]
-        #
-        # else:
-        #     max = len(test_dataset.ped_data)
-        #     test_ped = test_dataset.ped_data
-        #     val_ped = np.zeros(max)
-        #     train_ped = np.zeros(max)
-        #     for i in range(len(val_dataset.ped_data)):
-        #         val_ped[i] = val_dataset.ped_data[i]
-        #     for i in range(len(train_dataset.ped_data)):
-        #         train_ped[i] = train_dataset.ped_data[i]
-        #
-        # plt.figure(1)
-        # # plt.add_axes([0, 0, 1, 1])
-        # plt.bar(np.arange(max)-0.2, train_ped, color="r", width=0.2)
-        # plt.bar(np.arange(max), val_ped, color="g", width=0.2)
-        # plt.bar(np.arange(max)+0.2, test_ped, color="b", width=0.2)
-        # plt.ylabel("Total percentage of occurance(%)")
-        # plt.ylim(0, 100)
-        # plt.xlim(+0.50, 5.50)
-        # plt.yticks(np.arange(0, 100, 10))
-        # plt.xlabel("Number of secondary pedestrain")
-        # plt.title("Data distribution of secondary pedestrain")
-        # plt.legend(['train', 'val', 'test'])
-        # plt.grid(axis='y')
-        # plt.savefig("./data_pedestrain.png")
-        # plt.close(1)
-        #
-        # exit()
+
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                                    batch_size=128, shuffle=True, num_workers=4,
                                                    pin_memory=False)
@@ -488,86 +372,17 @@ class PIEIntent(object):
             fid.write("\n####### Data options #######\n")
             fid.write(str(data_opts))
 
-        train_model = social_stgcnn(max_nodes=train_dataset.max_nodes, seed=self.seed,
-                                    node_info=train_dataset.node_info, layers=layers).cuda()
+        train_model = social_stgcnn(max_nodes=train_dataset.max_nodes).cuda()
 
-        # print(torch.seed())
-        # pretrained_dict = torch.load('./data/graph/intention/31May2021-19h26m29s/model_epoch_13.pth')
-
-
-        # ##############################################################################################
-        # # If there are any changes made in the architecture and the you would want to use old trained
-        # # weights then the code below  is useful
-        #
-        # model_dict = train_model.state_dict()
-        # pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}  #1.filter out unnecessary keys
-        # model_dict.update(pretrained_dict)  # 2. overwrite entries in the existing state dict
-        # train_model.load_state_dict(model_dict)  # 3. load the new state dict
-        #
-        #################################################################################################
-        # train_model.load_state_dict(pretrained_dict)# comment this line if you are using above code
-        # (train_model.seed())
-        #
-        # exit()
-        # print(train_model.eval())
-        #
-        # for name, param in train_model.named_parameters():
-        #     if 'edge_importance_loc' in name:
-        #         param.requires_grad = False
-        #     # else:
-        #         print(name)
-
-        # exit()
-        ## To check paramters using pytorch lightning
-        #
-        # trainer = pl.Trainer()
-        # trainer.fit(train_model, train_dataloader=train_loader)
-        # filter(lambda p: p.requires_grad, train_model.parameters()
-        #################################################################################################
-        # Optimisers , learning rate schedulers and loss function
-        # optimizer = torch.optim.RMSprop(train_model.parameters(),
-        #                                 lr=optimizer_params['lr'],
-        #                                 weight_decay=optimizer_params['decay'])
-
-        # my_list = ['edge_importance.0', 'edge_importance.1', 'edge_importance.2', 'edge_importance_loc.0']
-        # params = list(filter(lambda kv: kv[0] in my_list, train_model.named_parameters()))
-        # base_params = list(filter(lambda kv: kv[0] not in my_list, train_model.named_parameters()))
 
         optimizer = torch.optim.SGD(train_model.parameters(),
                                     lr=optimizer_params['lr'],
                                     momentum=0.9)
 
-        # optimizer = torch.optim.SGD([
-        #     {'params': [i[1]for i in base_params]},
-        #     {'params':  [i[1]for i in params], 'lr': 0.01}
-        # ], lr=optimizer_params['lr'], momentum=0.9)
-
-        # optimizer = torch.optim.Adam(train_model.parameters(),
-        #                             lr=optimizer_params['lr'])
-
-        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
-        #                                                 mode='min',
-        #                                                 factor=train_config['learning_scheduler_params']['step_drop_rate'],
-        #                                                 patience=int(train_config['learning_scheduler_params']['plateau_patience']),
-        #                                                 min_lr=train_config['learning_scheduler_params']['min_lr'],
-        #                                                 verbose=True)
-
-        # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10,
-        #                                                  eta_min=1e-4,
-        #                                                  last_epoch=-1)
-
-        # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, [20], gamma=0.1, last_epoch=-1)
         loss_fn = nn.BCEWithLogitsLoss()
 
         #################################################################################################
-        # is_fst_loss_train = True
-        # loader_len_train = len(train_loader)
-        # turn_point_train = int(loader_len_train/batch_size)*batch_size + loader_len_train%batch_size -1
 
-        # is_fst_loss_val = True
-        # loader_len_val = len(val_loader)
-        # turn_point_val = int(loader_len_val/batch_size)*batch_size + loader_len_val%batch_size -1
-        # counting_negatives = 0
         epoch_losses_train = []
         epoch_accuracy_train = []
         best_accuracy = 0
@@ -577,16 +392,6 @@ class PIEIntent(object):
         max_TN = 0.5
         max_acc = 0
         max_epochs = 0
-        vari = []
-        for name, param in train_model.named_parameters():
-            if 'edge_importance' in name:
-                print(param.data.to('cpu'))
-                vari.append(param.data.to('cpu'))
-
-        for name, param in train_model.named_parameters():
-            if 'fcn' in name:
-                print(param.data.to('cpu'))
-                vari.append(param.data.to('cpu'))
 
         for epoch in range(epochs):
             accuracy = 0
@@ -611,50 +416,15 @@ class PIEIntent(object):
             for step, (graph, adj_matrix, location, label, node_label,class_label) in enumerate(train_loader):
 
                 G = Variable(graph.type(torch.FloatTensor)).cuda()
-                # G = []
                 Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
                 node_label = Variable(node_label.type(torch.FloatTensor)).cuda()
                 class_label = Variable(class_label.type(torch.FloatTensor)).cuda()
                 Loc = Variable(location.type(torch.FloatTensor)).cuda()
-                # pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
+
                 label = Variable(label.type(torch.float)).cuda()
-                # print(label.shape)
-                # outputs, _ = train_model(G, A.squeeze(0))
-                if count % 10 == 0:
-                    print(count)
-                    # print(Adj)
-                count = count + 1
 
                 outputs = train_model(G, Adj, Loc, node_label,class_label)
 
-                # for num, lab in enumerate(label):
-                #     check = False
-                #     for num_seq in node_label[num]:
-                #         if int(num_seq[1]) == 1 or int(num_seq[2]) == 1:
-                #             check = True
-                #
-                #     if check == True:
-                #         if int(lab) == 1:
-                #             count_cross_Tp += 1
-                #             if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 1:
-                #                 count_cross_p += 1
-                #
-                #         else:
-                #             count_cross_Tn += 1
-                #             if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 0:
-                #                 count_cross_n += 1
-                # if count % batch_size != 0 and step != turn_point_train:
-                #     l = loss_fn(outputs, label)
-                #     if is_fst_loss_train:
-                #         loss = l
-                #         is_fst_loss_train = False
-                #     else:
-                #         loss += l
-                #
-                # else:
-                #     loss = loss / batch_size
-                #     is_fst_loss_train = True
-                #     loss.backward()
 
                 l2_enc = torch.cat([x.view(-1) for x in train_model.st_gcn_networks.parameters()])
                 l2_enc_loc = torch.cat([x.view(-1) for x in train_model.st_gcn_networks_loc.parameters()])
@@ -662,12 +432,12 @@ class PIEIntent(object):
 
                 loss = loss_fn(outputs, label)
                 batch_losses.append(loss.data.cpu().numpy())
-                # torch.cuda.list_gpu_processes(device=0)
+
                 loss += 0.01 * torch.norm(l2_dec, p=1) + \
                         0.001 * torch.norm(l2_enc_loc, p=2) + \
                         0.05 * torch.norm(l2_enc, p=2)
 
-                #
+                
 
 
                 optimizer.zero_grad()  # (reset gradients)
@@ -676,24 +446,16 @@ class PIEIntent(object):
 
                 y_true.append(np.asarray(label.data.to('cpu')))
                 y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
-                # y_s_pred.append((torch.sigmoid(outputs).data.to('cpu')))
 
-            # scheduler.step()
-            # print(counting_negatives)
 
             y_true = np.concatenate(y_true, axis=0)
             y_pred = np.concatenate(y_pred, axis=0)
-            # y_s_pred = np.concatenate(y_s_pred, axis=0)
+
             print('Correct predictions of non-crossing', count_cross_n)
             print('Total non-crossing', count_cross_Tn)
             print('Correct predictions of crossing', count_cross_p)
             print('Total crossing', count_cross_Tp)
-            # # calculate thersold
-            # fpr, tpr, thresholds = roc_curve(y_true, y_s_pred)
-            # gmeans = np.sqrt(tpr * (1 - fpr))
-            # ix = np.argmax(gmeans)
-            # new_threshold = thresholds[ix]
-            # y_pred_tres = np.where(y_s_pred >= new_threshold, 1, 0)
+
 
             TN = confusion_matrix(y_true, y_pred)[0, 0]
             FP = confusion_matrix(y_true, y_pred)[0, 1]
@@ -710,53 +472,13 @@ class PIEIntent(object):
             print("FN: %g" % FN, "TN: %g" % TN)
             print("####")
 
-            # TN = confusion_matrix(y_true, y_pred_tres)[0, 0]
-            # FP = confusion_matrix(y_true, y_pred_tres)[0, 1]
-            # FN = confusion_matrix(y_true, y_pred_tres)[1, 0]
-            # TP = confusion_matrix(y_true, y_pred_tres)[1, 1]
-            # accuracy = accuracy_score(y_true, y_pred_tres)
-
-            # print("Accuracy threshold:  %g" % accuracy)
-            # print('CONFUSION MATRIX thresold:')
-            # print("TP: %g" % TP, "FP: %g" % FP)
-            # print("FN: %g" % FN, "TN: %g" % TN)
-            # print("####")
-            # #
-            # plt.figure(1)
-            # plt.plot(epoch_losses_train, "r^")
-            # plt.plot(epoch_losses_train, "r", label='train')
-            # # plt.plot(epoch_losses_val, "k^")
-            # # plt.plot(epoch_losses_val, "k", label='val')
-            # plt.ylabel("loss")
-            # plt.xlabel("epoch")
-            # plt.title("loss per epoch")
-            # plt.legend()
-            # plt.grid()
-            # plt.savefig("%s/epoch_losses.png" % model_path.split("model.pth")[0])
-            # plt.close(1)
-            #
-            # plt.figure(2)
-            # plt.plot(epoch_accuracy_train, "r^")
-            # plt.plot(epoch_accuracy_train, "r", label='train')
-            # # plt.plot(epoch_accuracy_val, "k^")
-            # # plt.plot(epoch_accuracy_val, "k", label='val')
-            # plt.ylabel("accuracy")
-            # plt.xlabel("epoch")
-            # plt.title("accuracy per epoch")
-            # plt.legend()
-            # plt.grid()
-            # plt.savefig("%s/epoch_accuracy.png" % model_path.split("model.pth")[0])
-            # plt.close(2)
+   
             # ############################################################################
             # # val:
             # ############################################################################
             train_model.eval()  # (set in evaluation mode, this affects BatchNorm and dropout)
             batch_losses = []
 
-            # for name, param in train_model.named_parameters():
-            # #     if name == 'encoder_model.cell_list.0.conv.weight' or name == 'encoder_model.cell_list.0.conv.bias' or 'fcn.weight':
-            # #         print(str(name), '\n', param)
-            #
             y_true = []
             y_pred = []
             y_s_pred = []
@@ -766,68 +488,27 @@ class PIEIntent(object):
             count_cross_n, count_cross_Tn = 0, 0
             for step, (graph, adj_matrix, location, label, node_label,class_label) in enumerate(val_loader):
                 with torch.no_grad():
-                    if count % 10 == 0:
-                        print(count)
-                    count = count + 1
-
 
                     G = Variable(graph.type(torch.FloatTensor)).cuda()
-                    # G = []
                     Adj = Variable(adj_matrix.type(torch.FloatTensor)).cuda()
                     node_label = Variable(node_label.type(torch.FloatTensor)).cuda()
                     class_label = Variable(class_label.type(torch.FloatTensor)).cuda()
                     Loc = Variable(location.type(torch.FloatTensor)).cuda()
-                    # pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
+
                     label = Variable(label.type(torch.float)).cuda()
-                    # print(label.shape)
-                    # outputs, _ = train_model(G, A.squeeze(0))
-                    # print(A)
+
                     outputs = train_model(G, Adj, Loc, node_label,class_label)
-                    # print(outputs.shape)
 
-                    # for num, lab in enumerate(label):
-                    #     check = False
-                    #     for num_seq in node_label[num]:
-                    #         if int(num_seq[1]) == 1 or int(num_seq[2]) == 1:
-                    #             check = True
-                    #
-                    #     if check == True:
-                    #         if int(lab) == 1:
-                    #             count_cross_Tp += 1
-                    #             if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 1:
-                    #                 count_cross_p += 1
-                    #
-                    #         else:
-                    #             count_cross_Tn += 1
-                    #             if int(np.round(torch.sigmoid(outputs[num]).data.to('cpu'))) == 0:
-                    #                 count_cross_n += 1
-                    # if count % batch_size != 0 and step != turn_point_val:
-                    #     l = loss_fn(outputs, label)
-                    #     if is_fst_loss_val:
-                    #         loss = l
-                    #         is_fst_loss_val = False
-                    #     else:
-                    #         loss += l
-                    #
-                    # else:
-                    #     loss = loss / batch_size
-                    #     is_fst_loss_val = True
-
-                        # val_loss +=loss
                     l2_enc = torch.cat([x.view(-1) for x in train_model.st_gcn_networks.parameters()])
                     l2_enc_loc = torch.cat([x.view(-1) for x in train_model.st_gcn_networks_loc.parameters()])
                     l2_dec = torch.cat([x.view(-1) for x in train_model.dec.parameters()])
 
                     loss = loss_fn(outputs, label)
                     batch_losses.append(loss.data.cpu().numpy())
-                    # torch.cuda.list_gpu_processes(device=0)
+
                     loss += 0.01 * torch.norm(l2_dec, p=1) + \
                             0.001 * torch.norm(l2_enc_loc, p=2) + \
                             0.05 * torch.norm(l2_enc, p=2)
-                            # 0.001 * torch.norm(l2_enc_loc, p=2)
-
-
-                    # val_loss += loss
 
                     y_true.append(np.asarray(label.data.to('cpu')))
                     y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
@@ -842,12 +523,6 @@ class PIEIntent(object):
             print('Correct predictions of crossing', count_cross_p)
             print('Total crossing', count_cross_Tp)
 
-            # fpr, tpr, thresholds = roc_curve(y_true, y_s_pred)
-            # gmeans = np.sqrt(tpr * (1 - fpr))
-            # ix = np.argmax(gmeans)
-            # new_threshold = thresholds[ix]
-            # y_pred_tres = np.where(y_s_pred >= new_threshold, 1, 0)
-
             TN = confusion_matrix(y_true, y_pred)[0, 0]
             FP = confusion_matrix(y_true, y_pred)[0, 1]
             FN = confusion_matrix(y_true, y_pred)[1, 0]
@@ -859,36 +534,15 @@ class PIEIntent(object):
             auc = roc_auc_score(y_true, y_s_pred)
             avg_p = average_precision_score(y_true, y_s_pred)
 
-            save = False
-            if auc >= max_acc:
-                if TN/(TN+FP) > 0.5:
-                    max_acc = auc
-                    max_TN = TN
-                    max_epochs = epoch+1
-                    save = True
-
             epoch_loss = np.mean(batch_losses)
             epoch_losses_val.append(epoch_loss)
             epoch_accuracy_val.append(accuracy)
 
             print("val loss: %g" % epoch_loss)
             print("Accuracy:  %g" % accuracy)
-
             print('CONFUSION MATRIX:')
             print("TP: %g" % TP, "FP: %g" % FP)
             print("FN: %g" % FN, "TN: %g" % TN)
-
-
-            # TN = confusion_matrix(y_true, y_pred_tres)[0, 0]
-            # FP = confusion_matrix(y_true, y_pred_tres)[0, 1]
-            # FN = confusion_matrix(y_true, y_pred_tres)[1, 0]
-            # TP = confusion_matrix(y_true, y_pred_tres)[1, 1]
-            # accuracy = accuracy_score(y_true, y_pred_tres)
-            # print("Accuracy threshold:  %g" % accuracy)
-
-            # print('CONFUSION MATRIX thresold:')
-            # print("TP: %g" % TP, "FP: %g" % FP)
-            # print("FN: %g" % FN, "TN: %g" % TN)
 
             print('Precision:', precision)
             print('Recall:', recall)
@@ -922,29 +576,18 @@ class PIEIntent(object):
             plt.savefig("%s/epoch_accuracy.png" % model_path.split("model.pth")[0])
             plt.close(2)
 
-            print(save)
-            if save is True:
-                for name, param in train_model.named_parameters():
-                    if 'edge_importance' in name:
-                        newvari.append(param.data.to('cpu'))
 
-                for name, param in train_model.named_parameters():
-                    if 'fcn' in name:
-                        newvari.append(param.data.to('cpu'))
-            # # if (epoch+1) % 1 == 0:
-                sub = [(np.subtract(vari[i], newvari[i])) for i in range(len(vari))]
-                print(sub)
+            save = False
+            if auc >= max_acc:
+                if TN/(TN+FP) > 0.5:
+                    max_acc = auc
+                    max_TN = TN
+                    max_epochs = epoch+1
+                    save = True
+            if save is True:
                 model_saving_path = model_path.split("model.pth")[0] + "/model_" + "epoch_best.pth"
                 torch.save(train_model.state_dict(), model_saving_path)
 
-        with open(max_path + '.txt', 'wt') as fid:
-            fid.write("Epoch:")
-            fid.write(str(max_epochs))
-            fid.write('\n')
-            fid.write(str(max_TN))
-            fid.write('\n')
-            fid.write(str(max_acc))
-        fid.close()
         return epoch_accuracy_val, epoch_losses_val
     #############################################################################################
     # Testing code
@@ -993,100 +636,13 @@ class PIEIntent(object):
 
         test_model = self.get_model(test_dataset.max_nodes)
 
-        # print(torch.seed())
-        # pretrained_dict = torch.load((os.path.join(model_path, 'pie_weight100.pth')))
-        # ##############################################################################################
-        # # If there are any changes made in the architecture and the you would want to use old trained
-        # # weights then the code below  is useful
-        #
-        # model_dict = test_model.state_dict()
-        # pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}  #1.filter out unnecessary keys
-        # model_dict.update(pretrained_dict)  # 2. overwrite entries in the existing state dict
-        # test_model.load_state_dict(model_dict)  # 3. load the new state dict
-
-        #################################################################################################
-        # test_model.load_state_dict(pretrained_dict) # comment this line if you are using above code
 
         test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_best.pth')))
-        # print('epoch_14')
-        # overlap = 1  # train_params ['overlap']
-        # print(test_model.eval())
-        def visualisation(seq_len, nodes, img_centre_seq, details):
-            '''
-            This creates visulasation as star graph
-            :param seq_len: Length of the input sequence
-            :param ped_ids: This will be matched to create the primary node
-            :param nodes: All the nodes in the sequence
-            :param img_centre_seq: To draw the circles to denote nodes
-            '''
-            sorted_img = []
-            # print(img_centre_seq)
-            path = 'E:\PIE_dataset\images'
-            for s in range(seq_len):
-
-                step = nodes[s]
-
-                img_p = str(step[0][0][0])
-                img_p = img_p.replace(os.sep, '/')
-                # print(img_p)
-                img_p1 = img_p.split('/')[-3:]
-                # print(img_p1)
-                img_p2 = img_p1[2].split('_')[0]
-                img_p = os.path.join(*img_p1[:-1])
-                # print(img_p)
-                img_p = os.path.join(path, img_p, img_p2 + '.png')
-                img = cv2.imread(img_p)
-                # print(img_p)
-                # exit()
-                img_cp_p = img_centre_seq[s][0]
-                cv2.circle(img, (int(img_cp_p[0]), int(img_cp_p[1])),
-                           radius=0, color=(0, 0, 255), thickness=25)
-                if details[0] == 0:
-                     x1 = 'GT:notcrossing'
-                     x2 = 'Pred:crossing'
-                else:
-                    x1 = 'GT:crossing'
-                    x2 = 'Pred:notcrossing'
-
-                cv2.putText(img, x1 + '\n' + x2, ((int(img_cp_p[0]) - 20, int(img_cp_p[1] - 20))),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9,
-                            (255, 0, 0), 2)
-
-                secondary_nodes = []
-
-                for h, stp in enumerate(step):
-                    if h > 0:
-                        img_cp_s = img_centre_seq[s][h]
-                        secondary_nodes.append(img_cp_s)
-                        cv2.circle(img, (int(img_cp_s[0]), int(img_cp_s[1])),
-                                   radius=0, color=(0, 255, 0), thickness=25)
-
-                for img_cp_s in secondary_nodes:
-                        cv2.line(img, (int(img_cp_p[0]), int(img_cp_p[1])), (int(img_cp_s[0]), int(img_cp_s[1])),
-                                 [255, 0, 0], 2)
-
-                sorted_img.append(img)
-
-            out = cv2.VideoWriter("%s/%s_%s_%s.avi" % ("U:/thesis_code/error_4/",
-                                                       img_p1[0], img_p1[1], img_p2),
-                                  cv2.VideoWriter_fourcc(*"MJPG"), 15, (1920, 1080))
-            for img_id in sorted_img:
-                out.write(img_id)
-            out.release()
-
-        for name, param in test_model.named_parameters():
-            # if name == 'edge_importance.0':
-                print(name)
-                print(param)
-        # exit()
-
-        #####################################################################################
 
         test_model.eval()  # (set in evaluation mode, this affects BatchNorm and dropout)
 
         count = 0
         some_count = 0
-        # counting_negatives = 0
         y_true = []
         y_pred = []
         y_s_pred = []
@@ -1095,7 +651,6 @@ class PIEIntent(object):
         with open(model_path + '/misclassification.txt', 'wt') as fid:
             fid.write("####### Misclssification #######\n")
 
-            # for step, (graph, adj_matrix, location, label, ped_ids, image, nodes, img_centre_seq) in enumerate(test_loader):
             for step, (graph, adj_matrix, location, label, node_label,class_label) in enumerate(test_loader):
                 with torch.no_grad():
                     if count % 10 == 0:
@@ -1108,34 +663,15 @@ class PIEIntent(object):
                     node_label = Variable(node_label.type(torch.FloatTensor)).cuda()
                     class_label = Variable(class_label.type(torch.FloatTensor)).cuda()
                     Loc = Variable(location.type(torch.FloatTensor)).cuda()
-                    # pose = Variable(ped_pose.type(torch.FloatTensor)).cuda()
                     label = Variable(label.type(torch.float)).cuda()
-                    # print(label.shape)
-                    # outputs, _ = train_model(G, A.squeeze(0))
-                    # print(A)
+                    
                     outputs = test_model(G, Adj, Loc, node_label,class_label)
-
-                    # for num, lab in enumerate(label):
-                    #     check = False
-                    #     for num_seq in node[num]:
-                    #         if int(num_seq[1]) == 1:
-                    #             check = True
-                    #
-                    #     if check == True:
-                    #         if int(lab) == 1:
-                    #             if int(outputs[num]) == 1:
-                    #                 count_cross_p += 1
-                    #
-                    #         else:
-                    #             if int(outputs[num]) == 0:
-                    #                 count_cross_n += 1
 
                     y_true.append(np.asarray(label.data.to('cpu')))
                     y_pred.append(np.round(torch.sigmoid(outputs).data.to('cpu')))
                     y_s_pred.append(torch.sigmoid(outputs).data.to('cpu'))
 
 
-        # print('intention of crossing:', counting_negatives)
         y_true = np.concatenate(y_true, axis=0)
         y_pred = np.concatenate(y_pred, axis=0)
         y_s_pred = np.concatenate(y_s_pred, axis=0)
@@ -1176,26 +712,6 @@ class PIEIntent(object):
         print('Average Precision:', avg_p)
         print('Delta predictions:', delta)
         print('Delta score:', delta_s)
-
-        # # yhat = y_pred[:, 1]
-        # # calculate roc curves
-        # fpr, tpr, thresholds = roc_curve(y_true, new_pred)
-        #
-        # gmeans = np.sqrt(tpr * (1 - fpr))
-        # # locate the index of the largest g-mean
-        # ix = np.argmax(gmeans)
-        #
-        # print('Best Threshold=%f, G-Mean=%.3f' % (thresholds[ix], gmeans[ix]))
-        # # plot the roc curve for the model
-        # pyplot.plot([0, 1], [0, 1], linestyle='--', label='No Skill')
-        # pyplot.plot(fpr, tpr, marker='.', label='Logistic')
-        # pyplot.scatter(fpr[ix], tpr[ix], marker='o', color='black', label='Best')
-        # # axis labels
-        # pyplot.xlabel('False Positive Rate')
-        # pyplot.ylabel('True Positive Rate')
-        # pyplot.legend()
-        # # show the plot
-        # pyplot.show()
 
         f1 = f1_score(y_true, y_pred)
         precision = precision_score(y_true, y_pred)
