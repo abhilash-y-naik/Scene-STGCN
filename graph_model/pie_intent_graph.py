@@ -267,7 +267,6 @@ class PIEIntent(object):
     def train(self,
               data_train,
               data_val,
-              data_test,
               batch_size=128,
               epochs=400,
               optimizer_type='sgd',
@@ -576,14 +575,12 @@ class PIEIntent(object):
             plt.savefig("%s/epoch_accuracy.png" % model_path.split("model.pth")[0])
             plt.close(2)
 
-
             save = False
             if auc >= max_acc:
                 if TN/(TN+FP) > 0.5:
                     max_acc = auc
-                    max_TN = TN
-                    max_epochs = epoch+1
                     save = True
+            print(save)
             if save is True:
                 model_saving_path = model_path.split("model.pth")[0] + "/model_" + "epoch_best.pth"
                 torch.save(train_model.state_dict(), model_saving_path)

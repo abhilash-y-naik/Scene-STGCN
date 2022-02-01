@@ -33,16 +33,15 @@ class Dataset(torch.utils.data.Dataset):
         self.unique_bbox = self.dataset['unique_bbox']
         self.unique_image = self.dataset['unique_image']
 
-        self.node_info = {'pedestrian':2,  # default should be one
+        self.node_info = {'pedestrian': 2,  # default should be one
                           'vehicle': 1,
                           'traffic_light': 1,
-                          'transit_station': 0,
+                          'transit_station': 1,
                           'sign': 1,
                           'crosswalk': 1,
                           'ego_vehicle': 0}
 
         self.structure = 'star'  # 'fully_connected'
-
 
         self.max_nodes = self.node_info['pedestrian'] + self.node_info['vehicle'] +\
                          self.node_info['traffic_light'] + self.node_info['crosswalk'] +\

@@ -117,7 +117,7 @@ if __name__ == '__main__':
         train_test = int(0)  # train_test: 0 - train only, 1 - train and test, 2 - test only
         data_path = './PIE_dataset'  # Path of the split images
         test_weights = ''
-        main(train_test=train_test, data_path=data_path, test_weights, regen_pkl = True)
+        main(train_test=train_test, data_path=data_path, test_weights=test_weights, regen_pkl = True)
 
     except ValueError:
         raise ValueError('Usage: python train_test.py <train_test>\n'

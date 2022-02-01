@@ -12,8 +12,6 @@ from torch.nn.parameter import Parameter
 from torch.nn.modules.module import Module
 
 import torch.optim as optim
-from graph_model.pose_module import Model
-from graph_model.graph_norm import GraphNorm
 
 class ConvTemporalGraphical(nn.Module):
     # Source : https://github.com/yysijie/st-gcn/blob/master/net/st_gcn.py
@@ -168,14 +166,14 @@ class social_stgcnn(nn.Module):
 
         self.st_gcn_networks = nn.ModuleList()
         self.st_gcn_networks.append(
-            st_gcn(512+ max_nodes, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0.5))
+            st_gcn(512+max_nodes, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0.5))
         for i in range(1, 3):
             self.st_gcn_networks.append(st_gcn(64, 64, (kernel_size, seq_len), 1,
                                                residual=False, dropout_tcn=0.5, dropout_conv=0.2))
 
         self.st_gcn_networks_loc = nn.ModuleList()
         self.st_gcn_networks_loc.append(
-            st_gcn(4+ max_nodes, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0))
+            st_gcn(4+max_nodes, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0))
         for i in range(1, 1):
             self.st_gcn_networks_loc.append(st_gcn(64, 64, (kernel_size, seq_len), 1,
                                                    residual=False, dropout_tcn=0.5, dropout_conv=0.2))
@@ -243,7 +241,6 @@ class social_stgcnn(nn.Module):
 
         for graph, imp_loc in zip(self.st_gcn_networks_loc, self.edge_importance_loc):
             loc, _ = graph(loc, a*imp_loc)
-
 
         v = v[:, :, :, 0]
         loc = loc[:, :, :, 0]
