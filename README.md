@@ -27,16 +27,6 @@ the following external libraries:<br/>
 * prettytable
 * ptable
 
-To install via virtual environment (recommended) follow these steps:
-
-- Install virtual environment `sudo apt-get install virtualenv`.
-
-- Create a virtual environment with Python3:
-
-```
-> virtualenv --system-site-packages -p python3 ./venv
-> source venv/bin/activate
-```
 - Install dependencies:
 `pip3 install -r requirements.txt`
 
