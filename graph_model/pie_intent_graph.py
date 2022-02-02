@@ -274,7 +274,10 @@ class PIEIntent(object):
               loss=['binary_crossentropy'],
               metrics=['acc'],
               data_opts='',
-              datasize = 500):
+              datasize = 500,
+              first_time=False,
+              path='',
+              node_info =''):
 
         """
         Training method for the model
@@ -323,8 +326,8 @@ class PIEIntent(object):
 
         self._sequence_length = self._encoder_seq_length
 
-        train_dataset = Dataset(data_train, train_d, data_opts, 'train', regen_pkl=True)
-        val_dataset = Dataset(data_val, val_d, data_opts, 'test', regen_pkl=True)
+        train_dataset = Dataset(data_train, train_d, data_opts, 'train',  first_time=first_time, path=path, node_info=node_info)
+        val_dataset = Dataset(data_val, val_d, data_opts, 'val', first_time=first_time, path=path, node_info=node_info)
 
 
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
@@ -595,7 +598,9 @@ class PIEIntent(object):
                    data_test,
                    data_opts='',
                    model_path='',
-                   visualize=False):
+                   first_time = False,
+                   path = '',
+                   node_info=''):
 
         with open(os.path.join(model_path, 'configs.pkl'), 'rb') as fid:
             try:
@@ -625,14 +630,13 @@ class PIEIntent(object):
                 'decoder_input': decoder_input,
                 'output': output}
 
-        test_dataset = Dataset(data_test, test_d, data_opts, 'test', regen_pkl=False)
+        test_dataset = Dataset(data_test, test_d, data_opts, 'test', first_time= first_time, path=path, node_info=node_info)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
                                                   batch_size=128, shuffle=False,
                                                   pin_memory=False,
                                                   num_workers=4)
 
         test_model = self.get_model(test_dataset.max_nodes)
-
 
         test_model.load_state_dict(torch.load(os.path.join(model_path, 'model_epoch_best.pth')))
 

@@ -17,7 +17,7 @@ from graph_model.utils import *
 
 class Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, dataset, track, data_opts, data_type, regen_pkl=False):
+    def __init__(self, dataset, track, data_opts, data_type,  first_time =False, path = '', node_info = ''):
 
         self.track = track
         self.dataset = dataset
@@ -33,13 +33,7 @@ class Dataset(torch.utils.data.Dataset):
         self.unique_bbox = self.dataset['unique_bbox']
         self.unique_image = self.dataset['unique_image']
 
-        self.node_info = {'pedestrian': 2,  # default should be one
-                          'vehicle': 1,
-                          'traffic_light': 1,
-                          'transit_station': 1,
-                          'sign': 1,
-                          'crosswalk': 1,
-                          'ego_vehicle': 0}
+        self.node_info = node_info
 
         self.structure = 'star'  # 'fully_connected'
 
@@ -48,7 +42,7 @@ class Dataset(torch.utils.data.Dataset):
                          self.node_info['transit_station'] + self.node_info['sign'] +\
                          self.node_info['ego_vehicle']
 
-        self.path = 'E:\PIE_dataset\images'  # Folder where the images are saved
+        self.path = path  # Folder where the images are saved
 
         self.num_examples = len(self.track['ped_ids'])
 
@@ -61,10 +55,8 @@ class Dataset(torch.utils.data.Dataset):
                                   model_name='vgg16_bn',
                                   data_subset=self.data_type, ind=1)
 
-        variable = False
-        if variable:
-            vgg16 = models.vgg16_bn().cuda()
-            vgg16.load_state_dict(torch.load("./pretrained_models/vgg16_bn-6c64b313.pth"))
+        if first_time:
+            vgg16 = models.vgg16_bn(pretrained=True).cuda()
             self.context_model = nn.Sequential(*list(vgg16.children())[:-1])
 
             try:
@@ -76,7 +68,7 @@ class Dataset(torch.utils.data.Dataset):
         self.seq_len = len(self.track['images'][0])
         
         # False for stop creating pickle file for nodes, graph and adjacency matrix
-        self.regen_pkl = regen_pkl
+
         count_positive_samples = 0
         count_ped = []
         count_veh=[]
@@ -94,7 +86,7 @@ class Dataset(torch.utils.data.Dataset):
                      'ego_vehicle': 0}
 
         pose_donotexit = 0
-        if self.regen_pkl:
+        if True:
             i = -1
             for img_sequences, bbox_sequences, ped_ids in zip(self.track['images'],
                                                               self.track['bboxes'],
@@ -175,7 +167,6 @@ class Dataset(torch.utils.data.Dataset):
                                     img_centre_unsorted[object_keys].append(self.get_center(bb))
                                     bbox_location_unsorted[object_keys].append(bb)
                                     key = os.path.join( im_name + '_' + n[0])
-
 
                         for idx, (n, bb, im) in enumerate(
                                 zip(ped[index][object_keys], box[index][object_keys], image[index][object_keys])):

@@ -7,7 +7,8 @@ from prettytable import PrettyTable
 
 # train models with data up to critical point
 # train_test = 0 (train only), 1 (train-test), 2 (test only)
-def train_intent(train_test, data_path, test_weights, regen_pkl):
+def train_intent(train_test, data_path, test_weights,
+                 regen_pkl,first_time,path, node_info):
     data_opts = {'fstride': 1,
                  'sample_type': 'all',
                  'height_rng': [0, float('inf')],
@@ -77,9 +78,10 @@ def train_intent(train_test, data_path, test_weights, regen_pkl):
                         data_val=beh_seq_val,
                         epochs=50,
                         batch_size=128,
-                        data_opts=data_opts)
-
-
+                        data_opts=data_opts,
+                        first_time=first_time,
+                        path=path,
+                        node_info=node_info)
 
     if train_test > 0:  # Test
         if saved_files_path == '':
@@ -97,7 +99,12 @@ def train_intent(train_test, data_path, test_weights, regen_pkl):
             with open(data_save_path, 'wb') as fid:
                 pickle.dump(beh_seq_test, fid, pickle.HIGHEST_PROTOCOL)
 
-        acc, f1, pre, rec = t.test_chunk(beh_seq_test, data_opts, saved_files_path, False)
+        acc, f1, pre, rec = t.test_chunk(beh_seq_test,
+                                         data_opts,
+                                         saved_files_path,
+                                         first_time=first_time,
+                                         path=path,
+                                         node_info=node_info)
 
         t = PrettyTable(['Acc', 'F1', 'Precision', 'Recall'])
         t.title = 'Intention model (local_context + bbox)'
@@ -106,9 +113,10 @@ def train_intent(train_test, data_path, test_weights, regen_pkl):
         print(t)
 
 
-def main(train_test=0, data_path='./PIE_dataset', test_weights= '', regen_pkl= False):
+def main(node_info, train_test=0, data_path='./PIE_dataset', test_weights= '', regen_pkl= False, first_time=False, path=''):
 
-    train_intent(train_test=train_test, data_path=data_path, test_weights= '', regen_pkl= False)
+    train_intent(train_test=train_test, data_path=data_path, test_weights= test_weights, regen_pkl= regen_pkl,
+                 first_time=first_time, path=path, node_info=node_info)
 
 
 if __name__ == '__main__':
@@ -116,8 +124,19 @@ if __name__ == '__main__':
     try:
         train_test = int(0)  # train_test: 0 - train only, 1 - train and test, 2 - test only
         data_path = './PIE_dataset'  # Path of the split images
-        test_weights = ''
-        main(train_test=train_test, data_path=data_path, test_weights=test_weights, regen_pkl = True)
+        test_weights = 'data/graph/intention/01Feb2022-15h37m06s'
+        regen_pkl = False
+        first_time = False
+        path = "./images"
+        node_info = {'pedestrian': 2,  # default should be one
+                          'vehicle': 1,
+                          'traffic_light': 1,
+                          'transit_station': 1,
+                          'sign': 1,
+                          'crosswalk': 1,
+                          'ego_vehicle': 0}
+        main(node_info, train_test=train_test, data_path=data_path, test_weights=test_weights, regen_pkl = regen_pkl,
+             first_time=first_time, path=path)
 
     except ValueError:
         raise ValueError('Usage: python train_test.py <train_test>\n'
