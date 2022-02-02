@@ -1,19 +1,8 @@
-import numpy as np
-import os
-import math
-import networkx as nx
-import pickle
+
 import time
-import cv2
-import torch
-import numpy as np
-import random
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torchvision.models as models
+
 from torch.autograd import Variable
-# import pytorch_lightning as pl  # To verify model parameters
+
 import matplotlib.pyplot as plt
 
 
@@ -22,7 +11,6 @@ from sklearn.metrics import f1_score
 from sklearn.metrics import precision_score
 from  sklearn.metrics import recall_score
 from sklearn.metrics import confusion_matrix
-from sklearn.metrics import roc_curve
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import average_precision_score
 
@@ -588,7 +576,7 @@ class PIEIntent(object):
                 model_saving_path = model_path.split("model.pth")[0] + "/model_" + "epoch_best.pth"
                 torch.save(train_model.state_dict(), model_saving_path)
 
-        return epoch_accuracy_val, epoch_losses_val
+        return model_path.split("model.pth")[0]
     #############################################################################################
     # Testing code
     #############################################################################################

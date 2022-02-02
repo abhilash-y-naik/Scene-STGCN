@@ -1,7 +1,6 @@
 import time
 import os
 import pickle
-import matplotlib.pyplot as plt
 from prettytable import PrettyTable
 import argparse
 
@@ -122,16 +121,16 @@ if __name__ == '__main__':
         parser = argparse.ArgumentParser(description='PyTorch Semantic-Line Training')
         # arguments from command line
         parser.add_argument('--train_test', default=0, type =int, help="train_test: 0 - train only, 1 - train and test, 2 - test only")
-        parser.add_argument('--weights_folder', default='data/graph/intention/all_objects', help='path to folder name')
+        parser.add_argument('--weights_folder', default='data/graph/intention/2objects', help='path to folder name')
         parser.add_argument('--data_path', default='./PIE_dataset', help='path to pie annotations')
         parser.add_argument('--regen_pkl', default=False, help='to regenerate pie data')
         parser.add_argument('--first_time', default=False, help='True for first time')
         parser.add_argument('--image_path', default='./images', help='path to split images')
         parser.add_argument('--pedestrian', default=1, type=int, help='number of pedestrians including target')
-        parser.add_argument('--vehicle', default=1, type=int, help='number of vehicles')
+        parser.add_argument('--vehicle', default=0, type=int, help='number of vehicles')
         parser.add_argument('--crosswalk', default=1, type=int, help='number of crosswalk')
-        parser.add_argument('--traffic_sign', default=1, type=int, help='number of traffic signs')
-        parser.add_argument('--transit_station', default=1, type=int, help='number of transit_station')
+        parser.add_argument('--traffic_sign', default=0, type=int, help='number of traffic signs')
+        parser.add_argument('--transit_station', default=0, type=int, help='number of transit_station')
         parser.add_argument('--traffic_light', default=1, type=int, help='number of traffic lights')
 
         args = parser.parse_args()

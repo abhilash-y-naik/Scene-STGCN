@@ -166,14 +166,14 @@ class social_stgcnn(nn.Module):
 
         self.st_gcn_networks = nn.ModuleList()
         self.st_gcn_networks.append(
-            st_gcn(512+max_nodes, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0.5))
+            st_gcn(512, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0.5))
         for i in range(1, 3):
             self.st_gcn_networks.append(st_gcn(64, 64, (kernel_size, seq_len), 1,
                                                residual=False, dropout_tcn=0.5, dropout_conv=0.2))
 
         self.st_gcn_networks_loc = nn.ModuleList()
         self.st_gcn_networks_loc.append(
-            st_gcn(4+max_nodes, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0))
+            st_gcn(4, 64, (kernel_size, seq_len), 1, residual=False, dropout_tcn=0.5, dropout_conv=0))
         for i in range(1, 1):
             self.st_gcn_networks_loc.append(st_gcn(64, 64, (kernel_size, seq_len), 1,
                                                    residual=False, dropout_tcn=0.5, dropout_conv=0.2))
@@ -233,8 +233,8 @@ class social_stgcnn(nn.Module):
         b_node, t_node, n_node, lab_node = node_label.size()
         node_label = node_label.permute(0, 3, 1, 2)
 
-        loc = torch.cat((loc, node_label), dim=1)
-        v = torch.cat((v, node_label), dim=1)
+        # loc = torch.cat((loc, node_label), dim=1)
+        # v = torch.cat((v, node_label), dim=1)
 
         for graph, imp in zip(self.st_gcn_networks, self.edge_importance):
             v, _ = graph(v, a*imp)
