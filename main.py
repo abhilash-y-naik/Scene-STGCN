@@ -3,7 +3,7 @@ import os
 import pickle
 import matplotlib.pyplot as plt
 from prettytable import PrettyTable
-
+import argparse
 
 # train models with data up to critical point
 # train_test = 0 (train only), 1 (train-test), 2 (test only)
@@ -46,7 +46,6 @@ def train_intent(train_test, data_path, test_weights,
 
         data_save_path = os.path.join('./PIE_dataset' + '/data_cache/graph/' + 'beh_seq_train' + '.pkl')
 
-
         if os.path.exists(data_save_path) and not regen_pkl:
             with open(data_save_path, 'rb') as fid:
                 try:
@@ -60,7 +59,6 @@ def train_intent(train_test, data_path, test_weights,
 
         beh_seq_train = imdb.balance_samples_count(beh_seq_train, label_type='intention_binary')
 
-
         data_save_path = os.path.join('./PIE_dataset' + '/data_cache/graph/' + 'beh_seq_val' + '.pkl')
         if os.path.exists(data_save_path) and not regen_pkl:
             with open(data_save_path, 'rb') as fid:
@@ -73,8 +71,7 @@ def train_intent(train_test, data_path, test_weights,
             with open(data_save_path, 'wb') as fid:
                 pickle.dump(beh_seq_val, fid, pickle.HIGHEST_PROTOCOL)
 
-
-        saved_file_path = t.train(data_train=beh_seq_train,
+        saved_files_path = t.train(data_train=beh_seq_train,
                         data_val=beh_seq_val,
                         epochs=50,
                         batch_size=128,
@@ -122,19 +119,37 @@ def main(node_info, train_test=0, data_path='./PIE_dataset', test_weights= '', r
 if __name__ == '__main__':
 
     try:
-        train_test = int(0)  # train_test: 0 - train only, 1 - train and test, 2 - test only
-        data_path = './PIE_dataset'  # Path of the split images
-        test_weights = 'data/graph/intention/01Feb2022-15h37m06s'
-        regen_pkl = False
-        first_time = False
-        path = "./images"
-        node_info = {'pedestrian': 2,  # default should be one
-                          'vehicle': 1,
-                          'traffic_light': 1,
-                          'transit_station': 1,
-                          'sign': 1,
-                          'crosswalk': 1,
+        parser = argparse.ArgumentParser(description='PyTorch Semantic-Line Training')
+        # arguments from command line
+        parser.add_argument('--train_test', default=0, type =int, help="train_test: 0 - train only, 1 - train and test, 2 - test only")
+        parser.add_argument('--weights_folder', default='data/graph/intention/all_objects', help='path to folder name')
+        parser.add_argument('--data_path', default='./PIE_dataset', help='path to pie annotations')
+        parser.add_argument('--regen_pkl', default=False, help='to regenerate pie data')
+        parser.add_argument('--first_time', default=False, help='True for first time')
+        parser.add_argument('--image_path', default='./images', help='path to split images')
+        parser.add_argument('--pedestrian', default=1, type=int, help='number of pedestrians including target')
+        parser.add_argument('--vehicle', default=1, type=int, help='number of vehicles')
+        parser.add_argument('--crosswalk', default=1, type=int, help='number of crosswalk')
+        parser.add_argument('--traffic_sign', default=1, type=int, help='number of traffic signs')
+        parser.add_argument('--transit_station', default=1, type=int, help='number of transit_station')
+        parser.add_argument('--traffic_light', default=1, type=int, help='number of traffic lights')
+
+        args = parser.parse_args()
+
+        train_test = args.train_test
+        data_path = args.data_path
+        test_weights = args.weights_folder
+        regen_pkl = args.regen_pkl
+        first_time = args.first_time
+        path = args.image_path
+        node_info = {'pedestrian': args.pedestrian,  # default should be one
+                          'vehicle': args.vehicle,
+                          'traffic_light': args.traffic_light,
+                          'transit_station': args.transit_station,
+                          'sign': args.traffic_sign,
+                          'crosswalk': args.crosswalk,
                           'ego_vehicle': 0}
+
         main(node_info, train_test=train_test, data_path=data_path, test_weights=test_weights, regen_pkl = regen_pkl,
              first_time=first_time, path=path)
 
