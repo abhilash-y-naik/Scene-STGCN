@@ -11,19 +11,21 @@ Intention Estimation".**]
 
 ### Table of contents
 * [Dependencies](#dependencies)
-* [PIE dataset](#PIE_dataset)
+* [PIE dataset](#datasets)
 * [Train](#train)
 * [Test](#test)
+* [Reference](#citation)
 
 <a name="dependencies"></a>
 ## Dependencies
-The interface is written and tested on Ubuntu 16.04 with Python 3.5, CUDA 9 and cuDNN 7. The interface also requires
+The interface is written and tested on Ubuntu 18.04 with Python 3.8, Pytorch 1.8.1 CUDA 11.1 and cuDNN 8.0.5_0. The interface also requires
 the following external libraries:<br/>
-* tensorflow (tested with 1.9 and 1.14)
-* keras (tested with 2.1 and 2.2)
+
 * scikit-learn
 * numpy
 * pillow
+* prettytable
+* ptable
 
 To install via virtual environment (recommended) follow these steps:
 
@@ -43,7 +45,7 @@ To install via virtual environment (recommended) follow these steps:
 ## PIE Dataset
 The code is trained and tested with [Pedestrian Intention Estimation (PIE) dataset](http://data.nvision2.eecs.yorku.ca/PIE_dataset/).
 
-Download annotations and video clips from the [PIE webpage](http://data.nvision2.eecs.yorku.ca/PIE_dataset/) and place them in the `PIE_dataset` directory. The folder structure should look like this:
+Download annotations from the [PIE webpage](http://data.nvision2.eecs.yorku.ca/PIE_dataset/) and place them in the `PIE_dataset` directory. The folder structure should look like this:
 
 ```
 PIE_dataset
@@ -51,44 +53,51 @@ PIE_dataset
         set01
         set02
         ...
-    PIE_clips
-        set01
-        set02
-        ...
 
+```
+
+Download the PIE clips and extract them as described in [PIE github](https://github.com/aras62/PIE).
+```
+images/set01/video_0001/
+								00000.png
+								00001.png
+								...
+images/set01/video_0002/
+								00000.png
+								00001.png
+								...		
+...
 ```
 
 Videos will be automatically split into individual frames for training. This will require **1.1T** of free space on the hard drive.
 
-Create environment variables for PIE data root and add them to your `.bashrc`:
-
-```
-export PIE_PATH=/path/to/PIE/data/root
-export PIE_RAW_PATH=/path/to/PIE/data/PIE_clips/
-```
-
-Download PIE data interface `pie_data.py` from [PIE github](https://github.com/aras62/PIE).
-
-
 <a name="train"></a>
 ## Train
 
-To train all models from scratch and evaluate them on the test data use this command:
+To train all models from scratch for the first time use this command:
 ```
-python train_test.py 1
+python main.py --train_test 0 --first_time True
 ```
-This will train intention, speed and trajectory models separately and evaluate them on the test data.
+This will train intention.
 
-_Note: training intention model uses image data and requires 32GB RAM.
+_Note: --first_time = True will create pickle file of all the objects in the image. It can take some hours to run for the first time.
 
-Due to the random initialization of the networks and minor changes to the annotations there might be slight variation in the results.
+To train all models from scratch after first time use this command:
+```
+python main.py --train_test 0
+```
+This will train intention.
 
 <a name="test"></a>
 ## Test
 
-To reproduce the results of our best model which combines pedestrian intention and vehicle speed for pedestrian trajectory prediction run this command:
+To reproduce the results of our best model which combines traffic light and crosswalk for pedestrian intention prediction run this command: Download the weights from [here](https://drive.google.com/drive/folders/10TrD2tgbRCkzTIKERhsnB7QKWRDh9kZs?usp=sharing)
 
 ```
-python train_test.py 2
+python main.py 2 --weights_folder data/graph/intention/2objects
 ```
+
+<a name="citation"></a>
+## Reference
+[PIE: A Large-Scale Dataset and Models for Pedestrian Intention Estimation and Trajectory Prediction](https://github.com/aras62/PIE)
 
