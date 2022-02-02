@@ -63,14 +63,14 @@ Videos will be automatically split into individual frames for training. This wil
 
 To train all models from scratch for the first time use this command:
 ```
-python main.py --train_test 0 --first_time True
+python main.py --train_test 0 --first_time True --image_path './images'
 ```
 
 _Note: "--first_time=True" will create pickle file of all the objects from the image in data folder. It can take some hours to run for the first time. After the first run it is quick since it loads the pickle file.
 
 To train all models from scratch after that use this command:
 ```
-python main.py --train_test 0
+python main.py --train_test 0 --image_path './images'
 ```
 
 <a name="test"></a>
