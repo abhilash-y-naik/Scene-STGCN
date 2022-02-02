@@ -76,7 +76,7 @@ python main.py --train_test 0 --image_path './images'
 <a name="test"></a>
 ## Test
 
-To reproduce the results of our best model which combines traffic light and crosswalk for pedestrian intention prediction run this command: Download the weights from [here](https://drive.google.com/drive/folders/10TrD2tgbRCkzTIKERhsnB7QKWRDh9kZs?usp=sharing)
+To reproduce the results of our best model which combines traffic light and crosswalk for pedestrian intention prediction run this command: Download weights from [here](https://drive.google.com/drive/folders/10TrD2tgbRCkzTIKERhsnB7QKWRDh9kZs?usp=sharing)
 
 ```
 python main.py 2 --weights_folder data/graph/intention/2objects
