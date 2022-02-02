@@ -65,15 +65,13 @@ To train all models from scratch for the first time use this command:
 ```
 python main.py --train_test 0 --first_time True
 ```
-This will train intention.
 
-_Note: --first_time = True will create pickle file of all the objects in the image. It can take some hours to run for the first time.
+_Note: "--first_time=True" will create pickle file of all the objects from the image in data folder. It can take some hours to run for the first time. After the first run it is quick since it loads the pickle file.
 
-To train all models from scratch after first time use this command:
+To train all models from scratch after that use this command:
 ```
 python main.py --train_test 0
 ```
-This will train intention.
 
 <a name="test"></a>
 ## Test
