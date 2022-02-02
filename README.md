@@ -27,9 +27,6 @@ the following external libraries:<br/>
 * prettytable
 * ptable
 
-- Install dependencies:
-`pip3 install -r requirements.txt`
-
 
 <a name="datasets"></a>
 ## PIE Dataset
